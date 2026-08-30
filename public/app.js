@@ -201,7 +201,11 @@ async function init() {
     bindUI();
     render();
   } catch (error) {
-    $('#masonry').textContent = '数据加载失败：' + error.message;
+    const hint =
+      window.location.protocol === 'file:'
+        ? 'file:// 模式无法读取 data.json，请通过 HTTP 访问：在项目目录运行 python3 -m http.server 8000 --directory public，再打开 http://localhost:8000'
+        : error.message;
+    $('#masonry').textContent = '数据加载失败：' + hint;
   }
 }
 
