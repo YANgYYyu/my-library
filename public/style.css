@@ -1,0 +1,362 @@
+:root {
+  --bg: #ffffff;
+  --bg-secondary: #f5f6f8;
+  --sidebar-bg: #fafafa;
+  --text: #1f2328;
+  --text-secondary: #59636e;
+  --border: #d8dee4;
+  --card-bg: #ffffff;
+  --card-hover-border: #0969da;
+  --accent: #0969da;
+  --accent-text: #ffffff;
+  --shadow: 0 1px 3px rgba(31, 35, 40, 0.12);
+  --shadow-hover: 0 4px 12px rgba(31, 35, 40, 0.16);
+  --modal-bg: rgba(31, 35, 40, 0.45);
+  --code-bg: #f6f8fa;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --bg-secondary: #161b22;
+    --sidebar-bg: #161b22;
+    --text: #e6edf3;
+    --text-secondary: #9198a1;
+    --border: #30363d;
+    --card-bg: #161b22;
+    --card-hover-border: #2f81f7;
+    --accent: #2f81f7;
+    --accent-text: #ffffff;
+    --shadow: 0 1px 3px rgba(1, 4, 9, 0.6);
+    --shadow-hover: 0 4px 12px rgba(1, 4, 9, 0.7);
+    --modal-bg: rgba(1, 4, 9, 0.65);
+    --code-bg: #0d1117;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  line-height: 1.6;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+/* ---- 侧边栏 ---- */
+
+.menu-toggle {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 40;
+  display: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 18px;
+  box-shadow: var(--shadow);
+}
+
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 240px;
+  padding: 20px 16px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  z-index: 30;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.site-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.sidebar-close {
+  display: none;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  padding: 4px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-item {
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-secondary);
+  text-align: left;
+  font-size: 15px;
+}
+
+.nav-item:hover {
+  background: var(--bg-secondary);
+  color: var(--text);
+}
+
+.nav-item.is-active {
+  background: var(--bg-secondary);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--modal-bg);
+  z-index: 25;
+}
+
+/* ---- 内容区 ---- */
+
+.content {
+  margin-left: 240px;
+  padding: 24px 28px 48px;
+}
+
+.content-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.content-header h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.view-count {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.masonry {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.masonry-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  display: block;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--text);
+  text-align: left;
+  box-shadow: var(--shadow);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card:hover,
+.card:focus-visible {
+  border-color: var(--card-hover-border);
+  box-shadow: var(--shadow-hover);
+  outline: none;
+}
+
+.card-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.card-intro {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  white-space: pre-line;
+  word-break: break-word;
+}
+
+/* ---- 弹窗 ---- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--modal-bg);
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-box {
+  position: relative;
+  width: min(720px, 100%);
+  max-height: min(78vh, 720px);
+  overflow-y: auto;
+  padding: 24px 26px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-hover);
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 24px;
+  line-height: 1;
+  padding: 4px 8px;
+}
+
+.modal-close:hover {
+  color: var(--text);
+}
+
+.modal-title {
+  margin: 0 32px 14px 0;
+  font-size: 20px;
+}
+
+.modal-body {
+  font-size: 15px;
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
+.modal-body pre {
+  padding: 12px 14px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.modal-body code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.modal-body pre code {
+  background: none;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+/* ---- 移动端 ---- */
+
+@media (max-width: 767px) {
+  .menu-toggle {
+    display: block;
+  }
+
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: var(--shadow-hover);
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-close {
+    display: block;
+  }
+
+  .content {
+    margin-left: 0;
+    padding: 64px 14px 40px;
+  }
+
+  body.drawer-open {
+    overflow: hidden;
+  }
+
+  .modal {
+    padding: 0;
+  }
+
+  .modal-box {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: none;
+    border-radius: 0;
+  }
+}
