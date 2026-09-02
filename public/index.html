@@ -9,13 +9,13 @@
 <body>
   <button id="menu-toggle" class="menu-toggle" type="button" aria-label="打开菜单" aria-expanded="false">☰</button>
 
-  <aside id="sidebar" class="sidebar" aria-hidden="true">
+  <aside id="sidebar" class="sidebar">
     <div class="sidebar-header">
       <span class="site-title">Prompt &amp; Skills</span>
       <button id="sidebar-close" class="sidebar-close" type="button" aria-label="关闭菜单">×</button>
     </div>
     <nav class="nav">
-      <button class="nav-item is-active" type="button" data-view="prompts">Prompts</button>
+      <button class="nav-item is-active" type="button" data-view="prompts" aria-current="page">Prompts</button>
       <button class="nav-item" type="button" data-view="skills">Skills</button>
     </nav>
   </aside>
@@ -26,11 +26,12 @@
       <h2 id="view-title">Prompts</h2>
       <span id="view-count" class="view-count"></span>
     </header>
-    <div id="masonry" class="masonry" aria-live="polite"></div>
+    <p id="status" class="sr-only" role="status"></p>
+    <div id="masonry" class="masonry" tabindex="-1"></div>
   </main>
 
   <div id="modal" class="modal" hidden>
-    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div id="modal-box" class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <button id="modal-close" class="modal-close" type="button" aria-label="关闭">×</button>
       <h3 id="modal-title" class="modal-title"></h3>
       <span id="modal-category" class="modal-category" hidden></span>

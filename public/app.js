@@ -7,8 +7,17 @@ const state = {
   data: null,
 };
 
+// 弹窗关闭后要把焦点还回去的元素
+let lastFocused = null;
+
+const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 function $(selector) {
   return document.querySelector(selector);
+}
+
+function isDrawer() {
+  return window.matchMedia('(max-width: 767px)').matches;
 }
 
 function columnCount() {
@@ -18,16 +27,21 @@ function columnCount() {
   return 3;
 }
 
-function renderMasonry(items) {
+function buildColumns() {
   const container = $('#masonry');
   container.innerHTML = '';
 
   const columns = Array.from({ length: columnCount() }, () => {
     const col = document.createElement('div');
     col.className = 'masonry-col';
+    container.appendChild(col);
     return col;
   });
-  columns.forEach((col) => container.appendChild(col));
+  return columns;
+}
+
+function renderMasonry(items) {
+  const columns = buildColumns();
 
   items.forEach((item) => {
     let shortest = 0;
@@ -43,19 +57,25 @@ function renderMasonry(items) {
 }
 
 function createCard(item) {
-  const card = document.createElement('button');
-  card.type = 'button';
+  const card = document.createElement('article');
   card.className = 'card';
 
   const title = document.createElement('h3');
   title.className = 'card-title';
-  title.textContent = item.title;
+  const link = document.createElement('button');
+  link.type = 'button';
+  link.className = 'card-link';
+  link.textContent = item.title;
+  link.addEventListener('click', () => openModal(item));
+  title.appendChild(link);
+  card.appendChild(title);
 
-  const intro = document.createElement('p');
-  intro.className = 'card-intro';
-  intro.textContent = item.intro || '';
-
-  card.append(title, intro);
+  if (item.intro) {
+    const intro = document.createElement('p');
+    intro.className = 'card-intro';
+    intro.textContent = item.intro;
+    card.appendChild(intro);
+  }
 
   if (item.category) {
     const tag = document.createElement('span');
@@ -64,18 +84,108 @@ function createCard(item) {
     card.appendChild(tag);
   }
 
-  card.addEventListener('click', () => openModal(item));
   return card;
+}
+
+function createSkeleton() {
+  const card = document.createElement('div');
+  card.className = 'skeleton-card';
+
+  const title = document.createElement('span');
+  title.className = 'skeleton-line skeleton-title';
+
+  const line = document.createElement('span');
+  line.className = 'skeleton-line';
+
+  const short = document.createElement('span');
+  short.className = 'skeleton-line skeleton-short';
+
+  card.append(title, line, short);
+  return card;
+}
+
+function renderSkeleton() {
+  buildColumns().forEach((col) => {
+    col.append(createSkeleton(), createSkeleton());
+  });
+}
+
+function createStatePanel(titleText, descText) {
+  const panel = document.createElement('div');
+  panel.className = 'state-panel';
+
+  const title = document.createElement('p');
+  title.className = 'state-title';
+  title.textContent = titleText;
+
+  const desc = document.createElement('p');
+  desc.className = 'state-desc';
+  desc.textContent = descText;
+
+  panel.append(title, desc);
+  return panel;
+}
+
+function renderState(panel) {
+  const container = $('#masonry');
+  container.innerHTML = '';
+  container.appendChild(panel);
+}
+
+function renderEmpty() {
+  renderState(
+    createStatePanel(
+      '暂无内容',
+      '这个列表还没有条目。在 content 目录下添加 Markdown 文件后，运行 python3 build.py 重新构建即可。'
+    )
+  );
+}
+
+function errorHint(error) {
+  if (window.location.protocol === 'file:') {
+    return 'file:// 模式无法读取 data.json，请通过 HTTP 访问：在项目目录运行 bash scripts/restart.sh，再打开 http://localhost:8001';
+  }
+  if (error.message.indexOf('404') !== -1) {
+    return 'data.json 不存在，请先在项目目录运行 python3 build.py 生成数据';
+  }
+  return error.message;
+}
+
+function renderError(error) {
+  const hint = errorHint(error);
+  const panel = createStatePanel('数据加载失败', hint);
+
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'btn btn-primary';
+  retry.textContent = '重试';
+  retry.addEventListener('click', async () => {
+    retry.disabled = true;
+    retry.textContent = '重试中…';
+    // 重试成功后焦点留在内容区，避免键盘用户被丢回页面顶部
+    if (await load()) $('#masonry').focus();
+  });
+  panel.appendChild(retry);
+
+  renderState(panel);
+  announce('数据加载失败：' + hint);
 }
 
 function render() {
   const items = state.data[state.view];
   const isPrompts = state.view === 'prompts';
-  $('#view-title').textContent = isPrompts ? 'Prompts' : 'Skills';
-  $('#view-count').textContent = items.length + ' 条';
+  const title = isPrompts ? 'Prompts' : 'Skills';
 
-  const sorted = [...items].sort(compareItems);
-  renderMasonry(sorted);
+  $('#view-title').textContent = title;
+  $('#view-count').textContent = items.length + ' 条';
+  announce(title + '，共 ' + items.length + ' 条');
+
+  if (!items.length) {
+    renderEmpty();
+    return;
+  }
+
+  renderMasonry([...items].sort(compareItems));
 }
 
 function compareItems(a, b) {
@@ -83,7 +193,14 @@ function compareItems(a, b) {
   return byCategory !== 0 ? byCategory : collator.compare(a.title, b.title);
 }
 
+function announce(message) {
+  const status = $('#status');
+  if (status.textContent === message) return;
+  status.textContent = message;
+}
+
 function openModal(item) {
+  lastFocused = document.activeElement;
   $('#modal-title').textContent = item.title;
 
   const categoryEl = $('#modal-category');
@@ -109,6 +226,7 @@ function openModal(item) {
     copyBtn.addEventListener('click', async () => {
       const ok = await copyText(item.body);
       copyBtn.textContent = ok ? '已复制' : '复制失败';
+      announce(ok ? '已复制原始 Markdown' : '复制失败，请手动选择文本复制');
       window.setTimeout(() => {
         copyBtn.textContent = '复制原始 Markdown';
       }, 1500);
@@ -130,10 +248,38 @@ function openModal(item) {
   }
 
   $('#modal').hidden = false;
+  document.body.classList.add('modal-open');
+  $('#modal-close').focus();
 }
 
 function hideModal() {
+  if ($('#modal').hidden) return;
+
   $('#modal').hidden = true;
+  document.body.classList.remove('modal-open');
+
+  if (lastFocused && document.body.contains(lastFocused)) {
+    lastFocused.focus();
+  }
+  lastFocused = null;
+}
+
+function trapFocus(event) {
+  if (event.key !== 'Tab') return;
+
+  const nodes = Array.from($('#modal-box').querySelectorAll(FOCUSABLE));
+  if (!nodes.length) return;
+
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 async function copyText(text) {
@@ -166,12 +312,33 @@ async function copyText(text) {
 
 function setDrawer(open) {
   const sidebar = $('#sidebar');
-  const scrim = $('#scrim');
+  const wasOpen = sidebar.classList.contains('is-open');
+
   sidebar.classList.toggle('is-open', open);
-  sidebar.setAttribute('aria-hidden', String(!open));
-  scrim.hidden = !open;
+  $('#scrim').hidden = !open;
   document.body.classList.toggle('drawer-open', open);
   $('#menu-toggle').setAttribute('aria-expanded', String(open));
+
+  if (!isDrawer() || wasOpen === open) return;
+  if (open) {
+    $('#sidebar-close').focus();
+  } else {
+    $('#menu-toggle').focus();
+  }
+}
+
+function selectView(view) {
+  state.view = view;
+  document.querySelectorAll('.nav-item').forEach((item) => {
+    const active = item.dataset.view === view;
+    item.classList.toggle('is-active', active);
+    if (active) {
+      item.setAttribute('aria-current', 'page');
+    } else {
+      item.removeAttribute('aria-current');
+    }
+  });
+  render();
 }
 
 function bindUI() {
@@ -185,11 +352,7 @@ function bindUI() {
 
   document.querySelectorAll('.nav-item').forEach((button) => {
     button.addEventListener('click', () => {
-      document.querySelectorAll('.nav-item').forEach((item) => {
-        item.classList.toggle('is-active', item === button);
-      });
-      state.view = button.dataset.view;
-      render();
+      selectView(button.dataset.view);
       setDrawer(false);
     });
   });
@@ -198,6 +361,10 @@ function bindUI() {
     if (event.key === 'Escape') {
       hideModal();
       setDrawer(false);
+      return;
+    }
+    if (!$('#modal').hidden) {
+      trapFocus(event);
     }
   });
 
@@ -205,28 +372,40 @@ function bindUI() {
   window.addEventListener('resize', () => {
     window.clearTimeout(resizeTimer);
     resizeTimer = window.setTimeout(() => {
+      if (!isDrawer() && $('#sidebar').classList.contains('is-open')) {
+        setDrawer(false);
+      }
       if (state.data) render();
     }, 150);
   });
 }
 
-async function init() {
+async function fetchData() {
+  const response = await fetch('data.json');
+  if (!response.ok) throw new Error('HTTP ' + response.status);
+  return await response.json();
+}
+
+async function load() {
+  const masonry = $('#masonry');
+  renderSkeleton();
+  masonry.setAttribute('aria-busy', 'true');
+
   try {
-    const response = await fetch('data.json');
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    state.data = await response.json();
-    bindUI();
+    state.data = await fetchData();
+    masonry.removeAttribute('aria-busy');
     render();
+    return true;
   } catch (error) {
-    let hint = error.message;
-    if (window.location.protocol === 'file:') {
-      hint =
-        'file:// 模式无法读取 data.json，请通过 HTTP 访问：在项目目录运行 bash scripts/restart.sh，再打开 http://localhost:8001';
-    } else if (error.message.indexOf('404') !== -1) {
-      hint = 'data.json 不存在，请先在项目目录运行 python3 build.py 生成数据';
-    }
-    $('#masonry').textContent = '数据加载失败：' + hint;
+    masonry.removeAttribute('aria-busy');
+    renderError(error);
+    return false;
   }
+}
+
+async function init() {
+  bindUI();
+  await load();
 }
 
 init();
