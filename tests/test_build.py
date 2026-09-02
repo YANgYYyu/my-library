@@ -60,55 +60,46 @@ class CollectTest(unittest.TestCase):
         path.write_text(text, encoding="utf-8")
         return path
 
-    def test_prompt_intro_is_first_line(self):
-        self.write(
-            "prompts",
-            "a.md",
-            "---\ntitle: 翻译助手\n---\n第一行简介\n第二行正文\n",
-        )
+    def test_prompt_title_comes_from_filename(self):
+        self.write("prompts", "翻译助手.md", "你是一名专业的翻译。\n第二行正文\n")
         data, errors = build.collect(self.content)
         self.assertEqual(errors, [])
         prompt = data["prompts"][0]
         self.assertEqual(prompt["title"], "翻译助手")
-        self.assertEqual(prompt["intro"], "第一行简介")
-        self.assertEqual(prompt["body"], "第一行简介\n第二行正文\n")
-
-    def test_prompt_intro_skips_blank_line_after_frontmatter(self):
-        self.write(
-            "prompts",
-            "d.md",
-            "---\ntitle: 翻译助手\n---\n\n你是一名专业的翻译。\n第二行\n",
-        )
-        data, _ = build.collect(self.content)
-        prompt = data["prompts"][0]
         self.assertEqual(prompt["intro"], "你是一名专业的翻译。")
-        self.assertEqual(prompt["body"], "\n你是一名专业的翻译。\n第二行\n")
+        self.assertEqual(prompt["body"], "你是一名专业的翻译。\n第二行正文\n")
+
+    def test_prompt_intro_skips_leading_blank_lines(self):
+        self.write("prompts", "翻译助手.md", "\n\n你是一名专业的翻译。\n第二行\n")
+        data, _ = build.collect(self.content)
+        self.assertEqual(data["prompts"][0]["intro"], "你是一名专业的翻译。")
 
     def test_prompt_empty_body_gives_empty_intro(self):
-        self.write("prompts", "b.md", "---\ntitle: 空正文\n---\n\n")
+        self.write("prompts", "b.md", "\n")
         data, _ = build.collect(self.content)
         prompt = data["prompts"][0]
         self.assertEqual(prompt["intro"], "")
         self.assertEqual(prompt["body"], "\n")
 
-    def test_missing_required_field_skips_file(self):
-        path = self.write("skills", "bad.md", "---\ntitle: 缺字段\n---\n")
+    def test_prompt_with_leftover_frontmatter_reports_error(self):
+        path = self.write("prompts", "旧格式.md", "---\ntitle: 旧格式\n---\n正文\n")
         data, errors = build.collect(self.content)
-        self.assertEqual(data["skills"], [])
+        self.assertEqual(data["prompts"], [])
         self.assertTrue(any(str(path) in error for error in errors))
+        self.assertTrue(any("frontmatter" in error for error in errors))
 
     def test_skill_fields_output(self):
         self.write(
             "skills",
-            "grill.md",
-            "---\ntitle: grill-me\nintro: 简介\nurl: https://github.com/x\n---\n",
+            "grill-me.md",
+            "---\nintro: 简介\nurl: https://github.com/x\n---\n",
         )
         data, errors = build.collect(self.content)
         self.assertEqual(errors, [])
         self.assertEqual(
             data["skills"][0],
             {
-                "id": "grill",
+                "id": "grill-me",
                 "title": "grill-me",
                 "category": "",
                 "intro": "简介",
@@ -116,58 +107,75 @@ class CollectTest(unittest.TestCase):
             },
         )
 
-    def test_unknown_key_ignored_in_output(self):
+    def test_skill_title_comes_from_filename_not_frontmatter(self):
         self.write(
-            "prompts",
-            "c.md",
-            "---\ntitle: 标题\nurl: https://example.com\n---\n正文\n",
+            "skills",
+            "写作助手.md",
+            "---\ntitle: 被忽略的标题\nintro: 简介\nurl: https://github.com/x\n---\n",
+        )
+        data, errors = build.collect(self.content)
+        self.assertEqual(errors, [])
+        self.assertEqual(data["skills"][0]["title"], "写作助手")
+
+    def test_skill_unknown_key_ignored_in_output(self):
+        self.write(
+            "skills",
+            "a.md",
+            "---\nintro: 简介\nurl: https://github.com/x\nurl2: 忽略\n---\n",
         )
         data, errors = build.collect(self.content)
         self.assertEqual(errors, [])
         self.assertEqual(
-            data["prompts"][0],
+            data["skills"][0],
             {
-                "id": "c",
-                "title": "标题",
+                "id": "a",
+                "title": "a",
                 "category": "",
-                "intro": "正文",
-                "body": "正文\n",
+                "intro": "简介",
+                "url": "https://github.com/x",
             },
         )
 
-    def test_invalid_frontmatter_reports_error(self):
-        path = self.write("prompts", "bad.md", "没有 frontmatter\n")
+    def test_skill_missing_required_field_skips_file(self):
+        path = self.write("skills", "bad.md", "---\nintro: 缺 url\n---\n")
         data, errors = build.collect(self.content)
-        self.assertEqual(data["prompts"], [])
+        self.assertEqual(data["skills"], [])
+        self.assertTrue(any(str(path) in error for error in errors))
+
+    def test_skill_invalid_frontmatter_reports_error(self):
+        path = self.write("skills", "bad.md", "没有 frontmatter\n")
+        data, errors = build.collect(self.content)
+        self.assertEqual(data["skills"], [])
         self.assertTrue(any(str(path) in error for error in errors))
 
     def test_prompts_in_subdirectories_are_collected(self):
-        self.write("prompts", "决策/a.md", "---\ntitle: A\n---\n正文 A\n")
-        self.write("prompts", "学习/b.md", "---\ntitle: B\n---\n正文 B\n")
+        self.write("prompts", "决策/a.md", "正文 A\n")
+        self.write("prompts", "学习/b.md", "正文 B\n")
         data, errors = build.collect(self.content)
         self.assertEqual(errors, [])
         self.assertEqual(len(data["prompts"]), 2)
 
     def test_category_is_subdirectory_name(self):
-        self.write("prompts", "决策/a.md", "---\ntitle: A\n---\n正文 A\n")
+        self.write("prompts", "决策/a.md", "正文 A\n")
         data, _ = build.collect(self.content)
         self.assertEqual(data["prompts"][0]["category"], "决策")
 
     def test_nested_subdirectory_gives_nested_category(self):
-        self.write("prompts", "学习/写作/a.md", "---\ntitle: A\n---\n正文 A\n")
+        self.write("prompts", "学习/写作/a.md", "正文 A\n")
         data, _ = build.collect(self.content)
         prompt = data["prompts"][0]
         self.assertEqual(prompt["category"], "学习/写作")
         self.assertEqual(prompt["id"], "学习/写作/a")
+        self.assertEqual(prompt["title"], "a")
 
     def test_top_level_file_has_empty_category(self):
-        self.write("prompts", "a.md", "---\ntitle: A\n---\n正文 A\n")
+        self.write("prompts", "a.md", "正文 A\n")
         data, _ = build.collect(self.content)
         self.assertEqual(data["prompts"][0]["category"], "")
 
     def test_same_filename_in_different_categories_both_kept(self):
-        self.write("prompts", "决策/第一性原理.md", "---\ntitle: 决策版\n---\n正文\n")
-        self.write("prompts", "学习/第一性原理.md", "---\ntitle: 学习版\n---\n正文\n")
+        self.write("prompts", "决策/第一性原理.md", "决策版正文\n")
+        self.write("prompts", "学习/第一性原理.md", "学习版正文\n")
         data, errors = build.collect(self.content)
         self.assertEqual(errors, [])
         self.assertEqual(
@@ -179,18 +187,18 @@ class CollectTest(unittest.TestCase):
         self.write(
             "skills",
             "工具/a.md",
-            "---\ntitle: A\nintro: 简介\nurl: https://github.com/x\n---\n",
+            "---\nintro: 简介\nurl: https://github.com/x\n---\n",
         )
         data, errors = build.collect(self.content)
         self.assertEqual(errors, [])
         self.assertEqual(data["skills"][0]["category"], "工具")
 
     def test_duplicate_id_across_kinds_reported(self):
-        self.write("prompts", "x.md", "---\ntitle: X\n---\n正文\n")
+        self.write("prompts", "x.md", "正文\n")
         self.write(
             "skills",
             "x.md",
-            "---\ntitle: X\nintro: 简介\nurl: https://github.com/x\n---\n",
+            "---\nintro: 简介\nurl: https://github.com/x\n---\n",
         )
         data, errors = build.collect(self.content)
         self.assertEqual(len(data["prompts"]), 1)

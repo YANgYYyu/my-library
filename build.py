@@ -2,12 +2,16 @@
 """Prompt & Skills 收藏站构建脚本。
 
 零依赖：仅使用 Python 3 标准库。
-读取 content/prompts 与 content/skills 下的 Markdown 文件，
-解析 frontmatter 后生成 public/data.json。
+读取 content/prompts 与 content/skills 下的 Markdown 文件，生成 public/data.json。
 
-两个目录下的 Markdown 按递归方式采集，因此可以用子目录对内容分类：
-子目录名即该条内容的 category，可继续嵌套（如 ``学习/写作``）。
-内容 ID 取相对于分类根目录的路径（不含扩展名），保证跨目录同名文件不会冲突。
+标题一律取自文件名（不含扩展名），内容文件里不再写 title 字段：
+
+- prompt：整个文件即正文，不使用 frontmatter；分类取自子目录名。
+- skill：保留 frontmatter，只需提供 intro 与 url。
+
+两个目录下的 Markdown 按递归方式采集，可用子目录分类，子目录名即 category，
+可继续嵌套（如 ``学习/写作``）。内容 ID 取相对于分类根目录的路径（不含扩展名），
+保证跨目录同名文件不会冲突。
 """
 
 from __future__ import annotations
@@ -20,8 +24,7 @@ ROOT = Path(__file__).resolve().parent
 CONTENT_DIR = ROOT / "content"
 DATA_PATH = ROOT / "public" / "data.json"
 
-PROMPT_REQUIRED = ("title",)
-SKILL_REQUIRED = ("title", "intro", "url")
+SKILL_REQUIRED = ("intro", "url")
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str] | None, str | None]:
@@ -84,7 +87,7 @@ def collect(content_dir: Path) -> tuple[dict, list[str]]:
     errors: list[str] = []
     seen_ids: set[str] = set()
 
-    for kind, required in (("prompts", PROMPT_REQUIRED), ("skills", SKILL_REQUIRED)):
+    for kind in ("prompts", "skills"):
         kind_dir = content_dir / kind
         if not kind_dir.is_dir():
             continue
@@ -101,42 +104,48 @@ def collect(content_dir: Path) -> tuple[dict, list[str]]:
                 errors.append(f"{path}: 读取失败: {exc}")
                 continue
 
-            fields, body = parse_frontmatter(text)
-            if fields is None:
-                errors.append(f"{path}: frontmatter 格式错误（文件前两行必须为 ---）")
-                continue
-
-            missing = [key for key in required if not fields.get(key)]
-            if missing:
-                errors.append(f"{path}: 缺少必填字段: {', '.join(missing)}")
-                continue
-
-            item_id = relative_id(path, kind_dir)
-            if item_id in seen_ids:
-                errors.append(f"{path}: 内容 ID 重复: {item_id}")
-                continue
-            seen_ids.add(item_id)
+            fields, _ = parse_frontmatter(text)
 
             if kind == "prompts":
-                prompts.append(
-                    {
-                        "id": item_id,
-                        "title": fields["title"],
-                        "category": relative_category(path, kind_dir),
-                        "intro": first_line(body),
-                        "body": body,
-                    }
-                )
+                if fields:
+                    errors.append(
+                        f"{path}: prompt 不再使用 frontmatter，标题取自文件名、分类取自子目录名"
+                    )
+                    continue
+                entry = {
+                    "id": relative_id(path, kind_dir),
+                    "title": path.stem,
+                    "category": relative_category(path, kind_dir),
+                    "intro": first_line(text),
+                    "body": text,
+                }
             else:
-                skills.append(
-                    {
-                        "id": item_id,
-                        "title": fields["title"],
-                        "category": relative_category(path, kind_dir),
-                        "intro": fields["intro"],
-                        "url": fields["url"],
-                    }
-                )
+                if fields is None:
+                    errors.append(
+                        f"{path}: frontmatter 格式错误（文件前两行必须为 ---）"
+                    )
+                    continue
+                missing = [key for key in SKILL_REQUIRED if not fields.get(key)]
+                if missing:
+                    errors.append(f"{path}: 缺少必填字段: {', '.join(missing)}")
+                    continue
+                entry = {
+                    "id": relative_id(path, kind_dir),
+                    "title": path.stem,
+                    "category": relative_category(path, kind_dir),
+                    "intro": fields["intro"],
+                    "url": fields["url"],
+                }
+
+            if entry["id"] in seen_ids:
+                errors.append(f"{path}: 内容 ID 重复: {entry['id']}")
+                continue
+            seen_ids.add(entry["id"])
+
+            if kind == "prompts":
+                prompts.append(entry)
+            else:
+                skills.append(entry)
 
     return {"prompts": prompts, "skills": skills}, errors
 
