@@ -213,6 +213,18 @@ button {
   word-break: break-word;
 }
 
+.card-tag {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
 /* ---- 弹窗 ---- */
 
 .modal {
@@ -261,6 +273,22 @@ button {
 .modal-title {
   margin: 0 32px 14px 0;
   font-size: 20px;
+}
+
+.modal-category {
+  display: inline-block;
+  margin: 0 0 14px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.modal-category[hidden] {
+  display: none;
 }
 
 .modal-body {

@@ -32,18 +32,31 @@ class ParseFrontmatterTest(unittest.TestCase):
         self.assertEqual(body, "正文\n")
 
 
+class RelativePathTest(unittest.TestCase):
+    def test_id_and_category_for_top_level_file(self):
+        kind_dir = Path("/repo/content/prompts")
+        path = kind_dir / "翻译助手.md"
+        self.assertEqual(build.relative_id(path, kind_dir), "翻译助手")
+        self.assertEqual(build.relative_category(path, kind_dir), "")
+
+    def test_id_and_category_for_nested_file(self):
+        kind_dir = Path("/repo/content/prompts")
+        path = kind_dir / "学习" / "写作" / "议论文.md"
+        self.assertEqual(build.relative_id(path, kind_dir), "学习/写作/议论文")
+        self.assertEqual(build.relative_category(path, kind_dir), "学习/写作")
+
+
 class CollectTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.content = Path(self._tmp.name) / "content"
-        (self.content / "prompts").mkdir(parents=True)
-        (self.content / "skills").mkdir(parents=True)
 
     def tearDown(self):
         self._tmp.cleanup()
 
     def write(self, kind, name, text):
         path = self.content / kind / name
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
         return path
 
@@ -97,6 +110,7 @@ class CollectTest(unittest.TestCase):
             {
                 "id": "grill",
                 "title": "grill-me",
+                "category": "",
                 "intro": "简介",
                 "url": "https://github.com/x",
             },
@@ -112,7 +126,13 @@ class CollectTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(
             data["prompts"][0],
-            {"id": "c", "title": "标题", "intro": "正文", "body": "正文\n"},
+            {
+                "id": "c",
+                "title": "标题",
+                "category": "",
+                "intro": "正文",
+                "body": "正文\n",
+            },
         )
 
     def test_invalid_frontmatter_reports_error(self):
@@ -121,11 +141,81 @@ class CollectTest(unittest.TestCase):
         self.assertEqual(data["prompts"], [])
         self.assertTrue(any(str(path) in error for error in errors))
 
+    def test_prompts_in_subdirectories_are_collected(self):
+        self.write("prompts", "决策/a.md", "---\ntitle: A\n---\n正文 A\n")
+        self.write("prompts", "学习/b.md", "---\ntitle: B\n---\n正文 B\n")
+        data, errors = build.collect(self.content)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(data["prompts"]), 2)
+
+    def test_category_is_subdirectory_name(self):
+        self.write("prompts", "决策/a.md", "---\ntitle: A\n---\n正文 A\n")
+        data, _ = build.collect(self.content)
+        self.assertEqual(data["prompts"][0]["category"], "决策")
+
+    def test_nested_subdirectory_gives_nested_category(self):
+        self.write("prompts", "学习/写作/a.md", "---\ntitle: A\n---\n正文 A\n")
+        data, _ = build.collect(self.content)
+        prompt = data["prompts"][0]
+        self.assertEqual(prompt["category"], "学习/写作")
+        self.assertEqual(prompt["id"], "学习/写作/a")
+
+    def test_top_level_file_has_empty_category(self):
+        self.write("prompts", "a.md", "---\ntitle: A\n---\n正文 A\n")
+        data, _ = build.collect(self.content)
+        self.assertEqual(data["prompts"][0]["category"], "")
+
+    def test_same_filename_in_different_categories_both_kept(self):
+        self.write("prompts", "决策/第一性原理.md", "---\ntitle: 决策版\n---\n正文\n")
+        self.write("prompts", "学习/第一性原理.md", "---\ntitle: 学习版\n---\n正文\n")
+        data, errors = build.collect(self.content)
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            [item["id"] for item in data["prompts"]],
+            ["决策/第一性原理", "学习/第一性原理"],
+        )
+
+    def test_skills_in_subdirectories_are_collected(self):
+        self.write(
+            "skills",
+            "工具/a.md",
+            "---\ntitle: A\nintro: 简介\nurl: https://github.com/x\n---\n",
+        )
+        data, errors = build.collect(self.content)
+        self.assertEqual(errors, [])
+        self.assertEqual(data["skills"][0]["category"], "工具")
+
+    def test_duplicate_id_across_kinds_reported(self):
+        self.write("prompts", "x.md", "---\ntitle: X\n---\n正文\n")
+        self.write(
+            "skills",
+            "x.md",
+            "---\ntitle: X\nintro: 简介\nurl: https://github.com/x\n---\n",
+        )
+        data, errors = build.collect(self.content)
+        self.assertEqual(len(data["prompts"]), 1)
+        self.assertEqual(data["skills"], [])
+        self.assertTrue(any("ID 重复" in error for error in errors))
+
+    def test_empty_kind_dir_reports_error(self):
+        (self.content / "prompts").mkdir(parents=True)
+        data, errors = build.collect(self.content)
+        self.assertEqual(data["prompts"], [])
+        self.assertTrue(any("没有找到任何 Markdown 文件" in e for e in errors))
+
 
 class WriteDataTest(unittest.TestCase):
     def test_data_json_utf8_without_ascii_escape(self):
         data = {
-            "prompts": [{"id": "翻译", "title": "翻译", "intro": "简介", "body": "正文"}],
+            "prompts": [
+                {
+                    "id": "翻译",
+                    "title": "翻译",
+                    "category": "",
+                    "intro": "简介",
+                    "body": "正文",
+                }
+            ],
             "skills": [],
         }
         with tempfile.TemporaryDirectory() as tmp:

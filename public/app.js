@@ -56,6 +56,14 @@ function createCard(item) {
   intro.textContent = item.intro || '';
 
   card.append(title, intro);
+
+  if (item.category) {
+    const tag = document.createElement('span');
+    tag.className = 'card-tag';
+    tag.textContent = item.category;
+    card.appendChild(tag);
+  }
+
   card.addEventListener('click', () => openModal(item));
   return card;
 }
@@ -66,12 +74,21 @@ function render() {
   $('#view-title').textContent = isPrompts ? 'Prompts' : 'Skills';
   $('#view-count').textContent = items.length + ' 条';
 
-  const sorted = [...items].sort((a, b) => collator.compare(a.title, b.title));
+  const sorted = [...items].sort(compareItems);
   renderMasonry(sorted);
+}
+
+function compareItems(a, b) {
+  const byCategory = collator.compare(a.category || '', b.category || '');
+  return byCategory !== 0 ? byCategory : collator.compare(a.title, b.title);
 }
 
 function openModal(item) {
   $('#modal-title').textContent = item.title;
+
+  const categoryEl = $('#modal-category');
+  categoryEl.textContent = item.category || '';
+  categoryEl.hidden = !item.category;
 
   const bodyEl = $('#modal-body');
   const actionsEl = $('#modal-actions');
@@ -203,7 +220,7 @@ async function init() {
   } catch (error) {
     const hint =
       window.location.protocol === 'file:'
-        ? 'file:// 模式无法读取 data.json，请通过 HTTP 访问：在项目目录运行 python3 -m http.server 8000 --directory public，再打开 http://localhost:8000'
+        ? 'file:// 模式无法读取 data.json，请通过 HTTP 访问：在项目目录运行 bash scripts/restart.sh，再打开 http://localhost:8001'
         : error.message;
     $('#masonry').textContent = '数据加载失败：' + hint;
   }
