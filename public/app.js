@@ -218,10 +218,13 @@ async function init() {
     bindUI();
     render();
   } catch (error) {
-    const hint =
-      window.location.protocol === 'file:'
-        ? 'file:// 模式无法读取 data.json，请通过 HTTP 访问：在项目目录运行 bash scripts/restart.sh，再打开 http://localhost:8001'
-        : error.message;
+    let hint = error.message;
+    if (window.location.protocol === 'file:') {
+      hint =
+        'file:// 模式无法读取 data.json，请通过 HTTP 访问：在项目目录运行 bash scripts/restart.sh，再打开 http://localhost:8001';
+    } else if (error.message.indexOf('404') !== -1) {
+      hint = 'data.json 不存在，请先在项目目录运行 python3 build.py 生成数据';
+    }
     $('#masonry').textContent = '数据加载失败：' + hint;
   }
 }
