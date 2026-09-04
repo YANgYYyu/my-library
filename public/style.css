@@ -18,6 +18,16 @@
   --radius: 10px;
   --radius-lg: 12px;
   --ease: cubic-bezier(0.2, 0, 0.2, 1);
+  /* 吸顶元素的半透明底色：卡片从下方划过时保持可读 */
+  --sticky-bg: rgba(255, 255, 255, 0.88);
+  /* 分类横条高度，分组标题吸顶时以此为偏移量 */
+  --group-nav-h: 52px;
+  /* 移动端汉堡按钮占用的顶部空间，桌面端为 0 */
+  --topbar-h: 0px;
+  /* 分组配色：色相由 JS 按分类名写入行内 --group-hue，这里给默认值 */
+  --group-hue: 212;
+  --group-accent: hsl(var(--group-hue) 62% 45%);
+  --group-accent-soft: hsl(var(--group-hue) 68% 95%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -37,6 +47,9 @@
     --shadow-hover: 0 4px 12px rgba(1, 4, 9, 0.7);
     --modal-bg: rgba(1, 4, 9, 0.65);
     --code-bg: #0d1117;
+    --sticky-bg: rgba(13, 17, 23, 0.88);
+    --group-accent: hsl(var(--group-hue) 62% 64%);
+    --group-accent-soft: hsl(var(--group-hue) 40% 20%);
   }
 }
 
@@ -205,6 +218,88 @@ button {
   font-weight: 600;
 }
 
+/* 侧边栏分类子导航，由 app.js 按当前视图的分类生成 */
+.nav-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.nav-groups-title {
+  margin: 0 0 6px;
+  padding: 0 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.nav-subitem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: background-color 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.nav-subitem::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--group-accent);
+  opacity: 0.55;
+}
+
+.nav-subitem:hover {
+  background: var(--bg-secondary);
+  color: var(--text);
+}
+
+.nav-subitem:active {
+  background: var(--accent-soft);
+}
+
+.nav-subitem.is-current {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.nav-subitem.is-current::before {
+  opacity: 1;
+}
+
+.nav-subitem.is-current .nav-subitem-count {
+  opacity: 1;
+}
+
+.nav-subitem-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-subitem-count {
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
 .scrim {
   position: fixed;
   inset: 0;
@@ -242,6 +337,155 @@ button {
   color: var(--text-secondary);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
+}
+
+/* 分类横条：负边距做通栏，卡片从下方划过时两侧不会漏出来 */
+.group-nav {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--group-nav-h);
+  margin: 0 -28px 2px;
+  padding: 8px 28px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  background: var(--sticky-bg);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.group-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.group-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 0.15s var(--ease), border-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+
+.group-chip:hover {
+  border-color: var(--group-accent);
+  color: var(--text);
+}
+
+.group-chip:active {
+  background: var(--group-accent-soft);
+}
+
+.group-chip.is-current {
+  border-color: var(--group-accent);
+  background: var(--group-accent-soft);
+  color: var(--group-accent);
+  font-weight: 600;
+}
+
+.group-chip-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.group-chip-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.groups:focus {
+  outline: none;
+}
+
+.group {
+  scroll-margin-top: calc(var(--topbar-h) + var(--group-nav-h) + 8px);
+}
+
+.group-header {
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--group-nav-h));
+  z-index: 10;
+  margin-bottom: 14px;
+  padding: 9px 0;
+  background: var(--sticky-bg);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.group-toggle::before {
+  content: "";
+  flex: none;
+  width: 3px;
+  height: 17px;
+  border-radius: 2px;
+  background: var(--group-accent);
+}
+
+.group-chevron {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin: 0 2px 2px;
+  border-right: 2px solid var(--text-secondary);
+  border-bottom: 2px solid var(--text-secondary);
+  transform: rotate(45deg);
+  transition: transform 0.18s var(--ease);
+}
+
+.group.is-collapsed .group-chevron {
+  transform: rotate(-45deg);
+}
+
+.group-name {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.group-count {
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--group-accent-soft);
+  color: var(--group-accent);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.group-toggle:hover .group-name {
+  color: var(--group-accent);
 }
 
 .masonry {
@@ -325,18 +569,6 @@ button {
   line-height: 1.7;
   white-space: pre-line;
   word-break: break-word;
-}
-
-.card-tag {
-  display: inline-block;
-  margin-top: 12px;
-  padding: 2px 9px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.6;
 }
 
 /* ---- 加载态 / 空态 / 错误态 ---- */
@@ -652,9 +884,19 @@ button {
   .content {
     padding: 24px 20px 48px;
   }
+
+  .group-nav {
+    margin: 0 -20px 2px;
+    padding: 8px 20px;
+  }
 }
 
 @media (max-width: 767px) {
+  :root {
+    --group-nav-h: 48px;
+    --topbar-h: 56px;
+  }
+
   .menu-toggle {
     display: inline-flex;
   }
@@ -689,6 +931,33 @@ button {
 
   .content-header h2 {
     font-size: 21px;
+  }
+
+  /* 移动端顶部已经有汉堡按钮，再叠一条吸顶横条会占掉太多高度：
+     横条改为随页面滚走，只保留分组标题吸顶 */
+  .group-nav {
+    position: static;
+    margin: 0 -16px 4px;
+    padding: 6px 16px;
+    background: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .group-header {
+    top: var(--topbar-h);
+  }
+
+  .group {
+    scroll-margin-top: calc(var(--topbar-h) + 8px);
+  }
+
+  .groups {
+    gap: 22px;
+  }
+
+  .group-name {
+    font-size: 16px;
   }
 
   .modal {

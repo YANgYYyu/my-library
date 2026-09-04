@@ -14,10 +14,11 @@
       <span class="site-title">Prompt &amp; Skills</span>
       <button id="sidebar-close" class="sidebar-close" type="button" aria-label="关闭菜单">×</button>
     </div>
-    <nav class="nav">
+    <nav class="nav" aria-label="内容类型">
       <button class="nav-item is-active" type="button" data-view="prompts" aria-current="page">Prompts</button>
       <button class="nav-item" type="button" data-view="skills">Skills</button>
     </nav>
+    <nav id="nav-groups" class="nav-groups" aria-label="分类导航" hidden></nav>
   </aside>
   <div id="scrim" class="scrim" hidden></div>
 
@@ -26,8 +27,9 @@
       <h2 id="view-title">Prompts</h2>
       <span id="view-count" class="view-count"></span>
     </header>
+    <nav id="group-nav" class="group-nav" aria-label="分类快捷跳转" hidden></nav>
     <p id="status" class="sr-only" role="status"></p>
-    <div id="masonry" class="masonry" tabindex="-1"></div>
+    <div id="groups" class="groups" tabindex="-1"></div>
   </main>
 
   <div id="modal" class="modal" hidden>
