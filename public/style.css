@@ -20,7 +20,9 @@
   --ease: cubic-bezier(0.2, 0, 0.2, 1);
   /* 吸顶元素的半透明底色：卡片从下方划过时保持可读 */
   --sticky-bg: rgba(255, 255, 255, 0.88);
-  /* 分类横条高度，分组标题吸顶时以此为偏移量 */
+  /* 分类横条高度。注意它同时是分组标题的吸顶偏移量（见 .group-header 的 top），
+     改这个值必须保证 .group-nav 的实际高度与之一致，否则两条吸顶条会互相压住。
+     移动端横条不吸顶，分组标题改用 --topbar-h。 */
   --group-nav-h: 52px;
   /* 移动端汉堡按钮占用的顶部空间，桌面端为 0 */
   --topbar-h: 0px;
@@ -28,6 +30,9 @@
   --group-hue: 212;
   --group-accent: hsl(var(--group-hue) 62% 45%);
   --group-accent-soft: hsl(var(--group-hue) 68% 95%);
+  /* 分组色当文字色时单独取一档明度：62%/45% 这组在青、绿、橙、天蓝
+     四个色相上只有 2.2–3.9:1，按 WCAG AA 正文 4.5:1 全部不达标 */
+  --group-accent-text: hsl(var(--group-hue) 70% 28%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -50,6 +55,7 @@
     --sticky-bg: rgba(13, 17, 23, 0.88);
     --group-accent: hsl(var(--group-hue) 62% 64%);
     --group-accent-soft: hsl(var(--group-hue) 40% 20%);
+    --group-accent-text: hsl(var(--group-hue) 70% 70%);
   }
 }
 
@@ -392,7 +398,7 @@ button {
 .group-chip.is-current {
   border-color: var(--group-accent);
   background: var(--group-accent-soft);
-  color: var(--group-accent);
+  color: var(--group-accent-text);
   font-weight: 600;
 }
 
@@ -431,6 +437,13 @@ button {
   background: var(--sticky-bg);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
+}
+
+/* h3 只提供标题语义，尺寸与字重交给里面的 .group-name */
+.group-heading {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 .group-toggle {
@@ -479,13 +492,13 @@ button {
   padding: 1px 9px;
   border-radius: 999px;
   background: var(--group-accent-soft);
-  color: var(--group-accent);
+  color: var(--group-accent-text);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
 .group-toggle:hover .group-name {
-  color: var(--group-accent);
+  color: var(--group-accent-text);
 }
 
 .masonry {

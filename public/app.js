@@ -21,6 +21,8 @@ let lastFocused = null;
 let scrollTicking = false;
 // 分组标题吸顶后离视口顶部的距离，render 时测量一次，滚动时直接用
 let stickyTop = 0;
+// 上次渲染时的布局指纹，用于判断 resize 是否真的需要重建列表
+let layoutKey = '';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -41,6 +43,11 @@ function columnCount() {
   if (width < 640) return 1;
   if (width < 1024) return 2;
   return 3;
+}
+
+// 列数与抽屉断点共同决定布局；只有这两者变了才值得重建整个列表
+function layoutKeyOf() {
+  return columnCount() + '|' + (isDrawer() ? 'drawer' : 'wide');
 }
 
 function buildColumns(container) {
@@ -75,7 +82,7 @@ function createCard(item) {
   const card = document.createElement('article');
   card.className = 'card';
 
-  const title = document.createElement('h3');
+  const title = document.createElement('h4');
   title.className = 'card-title';
   const link = document.createElement('button');
   link.type = 'button';
@@ -358,20 +365,28 @@ function renderGroups(groups) {
     toggle.addEventListener('click', () =>
       setCollapsed(group.key, !state.collapsed[state.view].has(group.key))
     );
-    header.appendChild(toggle);
 
-    // 折叠状态下不建瀑布流：元素不可见时读不到高度，会全塞进第一列
+    // 标题包在 h3 里：button 的内容模型只允许短语内容，塞不进 h3，
+    // 所以反过来让 h3 包 button——既是可聚焦的折叠控件，又保留标题语义
+    const heading = document.createElement('h3');
+    heading.className = 'group-heading';
+    heading.appendChild(toggle);
+    header.appendChild(heading);
+
     const body = document.createElement('div');
     body.className = 'masonry';
     body.id = bodyId;
     body.hidden = collapsed;
 
-    if (!collapsed) renderMasonry(body, group.items);
-
     section.classList.toggle('is-collapsed', collapsed);
     section.append(header, body);
     container.appendChild(section);
     state.sections.set(group.key, section);
+
+    // 必须等 section 挂进文档再建瀑布流：脱离文档的元素 offsetHeight 恒为 0，
+    // 「放进最短列」会每轮都选中第 0 列，整组卡片堆成一列。
+    // 折叠时同理不建（hidden 元素同样读不到高度），留到展开时补建。
+    if (!collapsed) renderMasonry(body, group.items);
   });
 
   stickyTop = measureStickyTop();
@@ -473,6 +488,8 @@ function render() {
   );
 
   renderGroupNavs(groups);
+
+  layoutKey = layoutKeyOf();
 
   if (!items.length) {
     renderEmpty();
@@ -684,7 +701,12 @@ function bindUI() {
       if (!isDrawer() && $('#sidebar').classList.contains('is-open')) {
         setDrawer(false);
       }
-      if (state.data) render();
+
+      // 移动端地址栏收放、软键盘弹起都会触发 resize，但列数与抽屉断点都没变。
+      // 这时重建整个列表只会造成跳动并丢掉焦点，因此只在布局真的变了时才重建
+      if (state.data && layoutKeyOf() !== layoutKey) {
+        render();
+      }
     }, 150);
   });
 }
