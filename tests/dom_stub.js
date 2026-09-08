@@ -43,6 +43,9 @@ class El {
     this.id = '';
     this._top = 0;
     this._uid = ++uid;
+    this.scrollLeft = 0;
+    this.scrollWidth = 0;
+    this.clientWidth = 0;
   }
   get childElementCount() { return this.children.length; }
   inDocument() {
@@ -95,7 +98,12 @@ class El {
   click() { this.dispatch('click'); }
   focus() { document.activeElement = this; }
   select() {}
-  getBoundingClientRect() { return { top: this._top, height: this.offsetHeight }; }
+  getBoundingClientRect() {
+    return { top: this._top, left: 0, width: 0, height: this.offsetHeight };
+  }
+  scrollTo(opts) {
+    if (opts && typeof opts.left === 'number') this.scrollLeft = opts.left;
+  }
   descendants() { return this.children.flatMap((c) => [c, ...c.descendants()]); }
   matches(sel) {
     if (sel.startsWith('#')) return this.id === sel.slice(1);
@@ -140,6 +148,9 @@ const document = {
 document.body.appendChild(registry.get('sidebar'));
 document.body.appendChild(registry.get('groups'));
 
+// fitScrollTail 靠这个判断文档末尾还剩多少可滚距离
+document.documentElement.scrollHeight = 1330;
+
 const winListeners = {};
 const window = {
   innerWidth: 1280,
@@ -169,7 +180,11 @@ global.fetch = async () => ({
   json: async () => JSON.parse(fs.readFileSync(process.argv[2], 'utf8')),
 });
 
-new Function(fs.readFileSync(process.argv[3], 'utf8'))();
+// 用 new Function 包一层执行，函数声明不会漏到外层；末尾把内部函数挂出来供断言调用
+new Function(
+  fs.readFileSync(process.argv[3], 'utf8') +
+    '\n;global.__inner = { fitScrollTail: () => fitScrollTail() };'
+)();
 
 function flush() { while (timers.length) timers.shift()(); }
 function fire(type) { (winListeners[type] || []).forEach((fn) => fn()); }
@@ -303,6 +318,20 @@ setTimeout(() => {
     fire('resize');
     flush();
     ok(groupsEl.children.map((s) => s._uid).join() !== before.join(), '列数变了却没重建');
+  });
+
+  check('文档不够长时给末尾补滚动余量', () => {
+    // 末尾分组滚不到吸顶位，scrollTo 会被静默钳制——点击看起来就是"没反应"
+    document.documentElement.scrollHeight = 500;
+    global.__inner.fitScrollTail();
+    const pad = parseInt(groupsEl.style.paddingBottom, 10);
+    ok(pad > 0, '末尾缺口没补上，实际 paddingBottom=' + groupsEl.style.paddingBottom);
+  });
+
+  check('文档够长时不补多余空白', () => {
+    document.documentElement.scrollHeight = 5000;
+    global.__inner.fitScrollTail();
+    eq(groupsEl.style.paddingBottom, '0px');
   });
 
   check('切到 Skills 走平铺，分列仍正确', () => {

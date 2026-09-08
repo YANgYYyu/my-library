@@ -328,6 +328,7 @@ function renderGroups(groups) {
     container.appendChild(flat);
     renderMasonry(flat, [...state.data[state.view]].sort(compareItems));
     stickyTop = 0;
+    fitScrollTail();
     syncActiveGroup();
     return;
   }
@@ -390,6 +391,7 @@ function renderGroups(groups) {
   });
 
   stickyTop = measureStickyTop();
+  fitScrollTail();
   syncActiveGroup();
 }
 
@@ -412,6 +414,8 @@ function setCollapsed(key, collapsed) {
   body.hidden = collapsed;
 
   if (!collapsed && !body.childElementCount) renderMasonry(body, group.items);
+  // 折叠/展开改变了文档高度，尾部余量要跟着重算，否则又滚不到位
+  fitScrollTail();
   syncActiveGroup();
 }
 
@@ -426,6 +430,24 @@ function measureStickyTop() {
   return Number.isNaN(top) ? 0 : top;
 }
 
+// 跳转要求目标分组的标题能顶到吸顶线，但文档末尾没有余量时，最后几个分组在物理上
+// 就滚不到那里——scrollTo 会被静默钳制到 maxScroll，点了跟没点一样。
+// 这里按缺口补一段尾部空白：只在真的不够时补，内容本来就长的视口补 0。
+function fitScrollTail() {
+  const container = $('#groups');
+  if (!container) return;
+
+  container.style.paddingBottom = '0px';
+  const sections = [...state.sections.values()];
+  const last = sections[sections.length - 1];
+  if (!last) return;
+
+  const docTop = window.scrollY + last.getBoundingClientRect().top;
+  const need =
+    docTop - stickyTop - 8 + window.innerHeight - document.documentElement.scrollHeight;
+  if (need > 0) container.style.paddingBottom = Math.ceil(need) + 'px';
+}
+
 function scrollToGroup(key) {
   const group = state.groups.find((item) => item.key === key);
   const section = state.sections.get(key);
@@ -438,39 +460,65 @@ function scrollToGroup(key) {
     top: Math.max(top, 0),
     behavior: prefersReducedMotion() ? 'auto' : 'smooth',
   });
+
+  // 先把高亮落到被点的分类上，再交给滚动事件按位置校正
+  syncActiveGroup(key);
 }
 
-function syncActiveGroup() {
+function syncActiveGroup(forcedKey) {
   if (!state.sections.size) return;
 
   let activeKey = state.groups[0].key;
-  const doc = document.documentElement;
-  const atBottom = window.innerHeight + window.scrollY >= doc.scrollHeight - 4;
 
-  if (atBottom) {
-    activeKey = state.groups[state.groups.length - 1].key;
+  if (forcedKey && state.sections.has(forcedKey)) {
+    // 点击分类时直接用被点的那个，不等滚动结束再反推：末尾分组可能因为
+    // 滚动被钳制而永远到不了吸顶线，反推会把高亮算到别的组上
+    activeKey = forcedKey;
   } else {
-    const line = stickyTop + 8;
+    // +1 容差：scrollToGroup 正好停在 stickyTop + 8，亚像素误差会让刚滚到的
+    // 分组差 0.x 像素而落选，高亮停在上一组
+    const line = stickyTop + 8 + 1;
     state.sections.forEach((section, key) => {
       if (section.getBoundingClientRect().top <= line) activeKey = key;
     });
   }
 
-  if (activeKey === state.activeGroup) return;
-  state.activeGroup = activeKey;
+  if (activeKey !== state.activeGroup) {
+    state.activeGroup = activeKey;
 
-  state.chipEls.forEach((el, key) => {
-    const current = key === activeKey;
-    el.classList.toggle('is-current', current);
-    if (current) {
-      el.setAttribute('aria-current', 'true');
-    } else {
-      el.removeAttribute('aria-current');
-    }
-  });
-  state.navEls.forEach((el, key) => {
-    el.classList.toggle('is-current', key === activeKey);
-  });
+    state.chipEls.forEach((el, key) => {
+      const current = key === activeKey;
+      el.classList.toggle('is-current', current);
+      if (current) {
+        el.setAttribute('aria-current', 'true');
+      } else {
+        el.removeAttribute('aria-current');
+      }
+    });
+    state.navEls.forEach((el, key) => {
+      el.classList.toggle('is-current', key === activeKey);
+    });
+  }
+
+  const chip = state.chipEls.get(activeKey);
+  if (chip) scrollChipIntoView(chip);
+}
+
+// 窄屏下分类横条会横向溢出，而滚动条是刻意隐藏的：当前 chip 可能整个落在可视区
+// 之外，用户看不见自然也就点不到。高亮变化时把它横向带回可视区中央
+function scrollChipIntoView(chip) {
+  const nav = $('#group-nav');
+  if (!nav || nav.scrollWidth <= nav.clientWidth + 1) return;
+
+  const navRect = nav.getBoundingClientRect();
+  const chipRect = chip.getBoundingClientRect();
+  const delta =
+    chipRect.left + chipRect.width / 2 - (navRect.left + navRect.width / 2);
+  const max = nav.scrollWidth - nav.clientWidth;
+  const target = Math.max(0, Math.min(nav.scrollLeft + delta, max));
+  if (Math.abs(target - nav.scrollLeft) < 4) return;
+
+  nav.scrollTo({ left: target, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
 }
 
 function render() {
@@ -706,6 +754,9 @@ function bindUI() {
       // 这时重建整个列表只会造成跳动并丢掉焦点，因此只在布局真的变了时才重建
       if (state.data && layoutKeyOf() !== layoutKey) {
         render();
+      } else {
+        // 列数没变但视口高度变了，尾部余量得按新高度重算
+        fitScrollTail();
       }
     }, 150);
   });
