@@ -1,5 +1,6 @@
 ---
 intro: 阶段收尾时对齐项目文档与 agent 记忆，并审计工作区规范是否被真正遵守。
+url: https://github.com/KKKKhazix/khazix-skills/tree/main/neat-freak
 ---
 
 # 洁癖 — Knowledge Base Neat-Freak

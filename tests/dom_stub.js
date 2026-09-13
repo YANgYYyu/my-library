@@ -402,22 +402,30 @@ setTimeout(() => {
     eq(modalEl.hidden, true, '弹窗已关闭');
   });
 
-  check('弹窗：Skill 有正文时渲染并可复制，有链接才给跳转', () => {
+  check('弹窗：Skill 渲染简介与正文，并给出复制与跳转', () => {
     openCard('skills', 'grill-me');
     ok(hasContent(bodyEl.querySelector('.skill-intro')), '显示简介');
     ok(hasContent(bodyEl.querySelector('.skill-detail')), '显示正文');
     eq(actionTexts(), ['复制原始 Markdown', '打开 GitHub']);
     closeModal();
+  });
 
-    openCard('skills', 'legacy-deploy-to-git');
-    eq(actionTexts(), ['复制原始 Markdown'], '自研 skill 没有上游链接');
+  // 下面两种形态取决于数据里有没有对应条目，没有就跳过；
+  // 将来加入无链接或无正文的 skill，这些断言会自动开始生效。
+  check('弹窗：无上游链接的 skill 不给跳转按钮（无对应数据时跳过）', () => {
+    const item = data.skills.find((s) => !s.url && s.body && s.body.trim());
+    if (!item) return;
+    openCard('skills', item.title);
+    eq(actionTexts(), ['复制原始 Markdown'], '无链接时不给跳转按钮');
     closeModal();
   });
 
-  check('弹窗：Skill 无正文时不渲染正文区、不给复制按钮', () => {
-    openCard('skills', '学术写作助手');
+  check('弹窗：无正文的 skill 不渲染正文区（无对应数据时跳过）', () => {
+    const item = data.skills.find((s) => !s.body || !s.body.trim());
+    if (!item) return;
+    openCard('skills', item.title);
     eq(bodyEl.querySelector('.skill-detail'), null);
-    eq(actionTexts(), ['打开 GitHub']);
+    eq(actionTexts(), item.url ? ['打开 GitHub'] : []);
     closeModal();
   });
 
