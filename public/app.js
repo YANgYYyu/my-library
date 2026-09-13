@@ -559,10 +559,13 @@ function announce(message) {
 }
 
 function appendMarkdown(el, text) {
+  // 旧版 data.json 没有 body 字段时，marked 不会抛错而是渲染出 "undefined"，
+  // 这里先兜底，避免把内部字段状态显示给用户。
+  const source = text || '';
   try {
-    el.innerHTML = marked.parse(text);
+    el.innerHTML = marked.parse(source);
   } catch (error) {
-    el.textContent = text;
+    el.textContent = source;
   }
 }
 

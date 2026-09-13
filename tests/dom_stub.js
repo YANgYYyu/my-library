@@ -105,6 +105,8 @@ class El {
     if (opts && typeof opts.left === 'number') this.scrollLeft = opts.left;
   }
   descendants() { return this.children.flatMap((c) => [c, ...c.descendants()]); }
+  // hideModal 会用它判断焦点该不该归还，缺了就只能靠肉眼验收弹窗关闭
+  contains(node) { return node === this || this.descendants().includes(node); }
   matches(sel) {
     if (sel.startsWith('#')) return this.id === sel.slice(1);
     if (sel.startsWith('.')) return this.classList.contains(sel.slice(1));
@@ -199,9 +201,17 @@ function check(name, fn) {
   }
 }
 function eq(actual, expected, label) {
-  const a = JSON.stringify(actual);
-  const b = JSON.stringify(expected);
+  const a = describe(actual);
+  const b = describe(expected);
   if (a !== b) throw new Error((label ? label + '：' : '') + '期望 ' + b + '，实际 ' + a);
+}
+// 元素有 parent 反向引用，直接 stringify 会撞上循环结构，
+// 把真实断言信息吞成一句「Converting circular structure to JSON」
+function describe(value) {
+  if (value && typeof value === 'object' && 'tagName' in value) {
+    return value.tagName + (value.className ? '.' + value.className : '');
+  }
+  return JSON.stringify(value);
 }
 function ok(cond, label) { if (!cond) throw new Error(label || '断言失败'); }
 
@@ -362,8 +372,53 @@ setTimeout(() => {
 
   check('切回 Prompts 恢复分组', () => {
     navItems[0].click();
-    eq(registry.get('groups').children.length, 5);
+    eq(registry.get('groups').children.length,
+      new Set(data.prompts.map((p) => p.category)).size, '分组数等于分类数');
     eq(navEl.hidden, false);
+  });
+
+  // 弹窗此前完全没有被测试覆盖：渲染、复制、跳转按钮全靠肉眼验收，
+  // skill 加上正文后分支更多（有/无正文、有/无链接），这里把四种组合固化下来。
+  const modalEl = registry.get('modal');
+  const bodyEl = registry.get('modal-body');
+  const actionsEl = registry.get('modal-actions');
+  const openCard = (view, title) => {
+    navItems[view === 'prompts' ? 0 : 1].click();
+    const link = groupsEl.querySelectorAll('.card-link').find((b) => b.textContent === title);
+    ok(link, '找到卡片 ' + title);
+    link.click();
+  };
+  const closeModal = () => registry.get('modal-close').click();
+  const actionTexts = () => actionsEl.children.map((c) => c.textContent);
+  // 桩里的 marked 写 innerHTML，降级分支写 textContent，两条通道都要认
+  const hasContent = (el) => ((el && (el.innerHTML || el.textContent)) || '').length > 0;
+
+  check('弹窗：Prompt 渲染正文并给出复制按钮', () => {
+    openCard('prompts', '第一性原理');
+    eq(modalEl.hidden, false, '弹窗已打开');
+    ok(hasContent(bodyEl), '正文已渲染');
+    eq(actionTexts(), ['复制原始 Markdown']);
+    closeModal();
+    eq(modalEl.hidden, true, '弹窗已关闭');
+  });
+
+  check('弹窗：Skill 有正文时渲染并可复制，有链接才给跳转', () => {
+    openCard('skills', 'grill-me');
+    ok(hasContent(bodyEl.querySelector('.skill-intro')), '显示简介');
+    ok(hasContent(bodyEl.querySelector('.skill-detail')), '显示正文');
+    eq(actionTexts(), ['复制原始 Markdown', '打开 GitHub']);
+    closeModal();
+
+    openCard('skills', 'legacy-deploy-to-git');
+    eq(actionTexts(), ['复制原始 Markdown'], '自研 skill 没有上游链接');
+    closeModal();
+  });
+
+  check('弹窗：Skill 无正文时不渲染正文区、不给复制按钮', () => {
+    openCard('skills', '学术写作助手');
+    eq(bodyEl.querySelector('.skill-detail'), null);
+    eq(actionTexts(), ['打开 GitHub']);
+    closeModal();
   });
 
   process.stdout.write(JSON.stringify({ checks: checks, info: info }));

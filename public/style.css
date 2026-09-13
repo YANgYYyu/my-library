@@ -661,9 +661,12 @@ button {
 
 .modal-box {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: min(720px, 100%);
   max-height: min(80vh, 720px);
-  overflow-y: auto;
+  /* 正文自己滚动，操作按钮常驻底部：长正文下不必滚到底才能复制 */
+  overflow: hidden;
   padding: 26px 28px 28px;
   background: var(--card-bg);
   border: 1px solid var(--border);
@@ -715,6 +718,9 @@ button {
 }
 
 .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   font-size: 15px;
   color: var(--text);
   line-height: 1.75;
@@ -802,6 +808,7 @@ button {
 }
 
 .modal-actions {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
