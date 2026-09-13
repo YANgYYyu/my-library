@@ -558,6 +558,30 @@ function announce(message) {
   status.textContent = message;
 }
 
+function appendMarkdown(el, text) {
+  try {
+    el.innerHTML = marked.parse(text);
+  } catch (error) {
+    el.textContent = text;
+  }
+}
+
+function appendCopyButton(parent, text) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-primary';
+  btn.textContent = '复制原始 Markdown';
+  btn.addEventListener('click', async () => {
+    const ok = await copyText(text);
+    btn.textContent = ok ? '已复制' : '复制失败';
+    announce(ok ? '已复制原始 Markdown' : '复制失败，请手动选择文本复制');
+    window.setTimeout(() => {
+      btn.textContent = '复制原始 Markdown';
+    }, 1500);
+  });
+  parent.appendChild(btn);
+}
+
 function openModal(item) {
   lastFocused = document.activeElement;
   $('#modal-title').textContent = item.title;
@@ -572,38 +596,31 @@ function openModal(item) {
   actionsEl.innerHTML = '';
 
   if (state.view === 'prompts') {
-    try {
-      bodyEl.innerHTML = marked.parse(item.body);
-    } catch (error) {
-      bodyEl.textContent = item.body;
-    }
-
-    const copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.className = 'btn btn-primary';
-    copyBtn.textContent = '复制原始 Markdown';
-    copyBtn.addEventListener('click', async () => {
-      const ok = await copyText(item.body);
-      copyBtn.textContent = ok ? '已复制' : '复制失败';
-      announce(ok ? '已复制原始 Markdown' : '复制失败，请手动选择文本复制');
-      window.setTimeout(() => {
-        copyBtn.textContent = '复制原始 Markdown';
-      }, 1500);
-    });
-    actionsEl.appendChild(copyBtn);
+    appendMarkdown(bodyEl, item.body);
+    appendCopyButton(actionsEl, item.body);
   } else {
     const intro = document.createElement('p');
     intro.className = 'skill-intro';
     intro.textContent = item.intro || '';
     bodyEl.appendChild(intro);
 
-    const githubBtn = document.createElement('a');
-    githubBtn.className = 'btn btn-primary';
-    githubBtn.href = item.url;
-    githubBtn.target = '_blank';
-    githubBtn.rel = 'noopener noreferrer';
-    githubBtn.textContent = '打开 GitHub';
-    actionsEl.appendChild(githubBtn);
+    if (item.body && item.body.trim()) {
+      const detail = document.createElement('div');
+      detail.className = 'skill-detail';
+      appendMarkdown(detail, item.body);
+      bodyEl.appendChild(detail);
+      appendCopyButton(actionsEl, item.body);
+    }
+
+    if (item.url) {
+      const githubBtn = document.createElement('a');
+      githubBtn.className = 'btn btn-primary';
+      githubBtn.href = item.url;
+      githubBtn.target = '_blank';
+      githubBtn.rel = 'noopener noreferrer';
+      githubBtn.textContent = '打开 GitHub';
+      actionsEl.appendChild(githubBtn);
+    }
   }
 
   $('#modal').hidden = false;

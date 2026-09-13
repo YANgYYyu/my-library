@@ -7,7 +7,7 @@
 标题一律取自文件名（不含扩展名），内容文件里不再写 title 字段：
 
 - prompt：整个文件即正文，不使用 frontmatter；分类取自子目录名。
-- skill：保留 frontmatter，只需提供 intro 与 url。
+- skill：保留 frontmatter，必填 intro，可选 url；正文为 frontmatter 之后的内容。
 
 两个目录下的 Markdown 按递归方式采集，可用子目录分类，子目录名即 category，
 可继续嵌套（如 ``学习/写作``）。内容 ID 取相对于分类根目录的路径（不含扩展名），
@@ -24,7 +24,8 @@ ROOT = Path(__file__).resolve().parent
 CONTENT_DIR = ROOT / "content"
 DATA_PATH = ROOT / "public" / "data.json"
 
-SKILL_REQUIRED = ("intro", "url")
+# url 可选：自研或本地 skill 没有 GitHub 链接，缺失时不输出跳转按钮即可。
+SKILL_REQUIRED = ("intro",)
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str] | None, str | None]:
@@ -104,7 +105,7 @@ def collect(content_dir: Path) -> tuple[dict, list[str]]:
                 errors.append(f"{path}: 读取失败: {exc}")
                 continue
 
-            fields, _ = parse_frontmatter(text)
+            fields, body = parse_frontmatter(text)
 
             if kind == "prompts":
                 if fields:
@@ -134,7 +135,8 @@ def collect(content_dir: Path) -> tuple[dict, list[str]]:
                     "title": path.stem,
                     "category": relative_category(path, kind_dir),
                     "intro": fields["intro"],
-                    "url": fields["url"],
+                    "url": fields.get("url", ""),
+                    "body": body,
                 }
 
             if entry["id"] in seen_ids:

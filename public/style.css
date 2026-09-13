@@ -791,6 +791,16 @@ button {
   color: var(--text-secondary);
 }
 
+.skill-detail {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.skill-detail > :first-child {
+  margin-top: 0;
+}
+
 .modal-actions {
   display: flex;
   flex-wrap: wrap;

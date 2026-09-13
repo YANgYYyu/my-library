@@ -104,8 +104,26 @@ class CollectTest(unittest.TestCase):
                 "category": "",
                 "intro": "简介",
                 "url": "https://github.com/x",
+                "body": "",
             },
         )
+
+    def test_skill_body_output(self):
+        self.write(
+            "skills",
+            "a.md",
+            "---\nintro: 简介\nurl: https://github.com/x\n---\n# 标题\n\n正文\n",
+        )
+        data, errors = build.collect(self.content)
+        self.assertEqual(errors, [])
+        self.assertEqual(data["skills"][0]["body"], "# 标题\n\n正文\n")
+
+    def test_skill_url_optional_for_self_made_skills(self):
+        self.write("skills", "自研.md", "---\nintro: 简介\n---\n正文\n")
+        data, errors = build.collect(self.content)
+        self.assertEqual(errors, [])
+        self.assertEqual(data["skills"][0]["url"], "")
+        self.assertEqual(data["skills"][0]["body"], "正文\n")
 
     def test_skill_title_comes_from_filename_not_frontmatter(self):
         self.write(
@@ -133,14 +151,16 @@ class CollectTest(unittest.TestCase):
                 "category": "",
                 "intro": "简介",
                 "url": "https://github.com/x",
+                "body": "",
             },
         )
 
     def test_skill_missing_required_field_skips_file(self):
-        path = self.write("skills", "bad.md", "---\nintro: 缺 url\n---\n")
+        path = self.write("skills", "bad.md", "---\nurl: https://github.com/x\n---\n")
         data, errors = build.collect(self.content)
         self.assertEqual(data["skills"], [])
         self.assertTrue(any(str(path) in error for error in errors))
+        self.assertTrue(any("intro" in error for error in errors))
 
     def test_skill_invalid_frontmatter_reports_error(self):
         path = self.write("skills", "bad.md", "没有 frontmatter\n")

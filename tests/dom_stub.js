@@ -219,6 +219,10 @@ const navEl = registry.get('group-nav');
 const sidebarEl = registry.get('nav-groups');
 const info = {};
 
+// 断言里的总量与分组数从数据推导，避免每次新增一条内容都要改测试：
+// 真正要守住的是「分组条数之和等于总条数」「两处导航与分组数一致」这类结构关系。
+const data = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+
 setTimeout(() => {
   const sectionCards = (section) =>
     section.querySelector('.masonry').children.map((c) => c.querySelectorAll('.card').length);
@@ -238,11 +242,13 @@ setTimeout(() => {
   });
 
   check('分组条数与两处导航', () => {
-    eq(groupsEl.children.map((s) => s.querySelector('.group-count').textContent),
-      ['3 条', '2 条', '2 条', '1 条', '4 条']);
-    eq(navEl.children.length, 5);
-    eq(sidebarEl.children.length, 6, '侧边栏 1 个标题 + 5 项');
-    eq(registry.get('view-count').textContent, '12 条 · 5 个分类');
+    const counts = groupsEl.children.map((s) =>
+      Number(s.querySelector('.group-count').textContent.replace(' 条', '')));
+    eq(counts.reduce((a, b) => a + b, 0), data.prompts.length, '分组条数之和等于条目总数');
+    eq(navEl.children.length, counts.length, '横条导航项数等于分组数');
+    eq(sidebarEl.children.length, counts.length + 1, '侧边栏为 1 个标题 + 各分组');
+    eq(registry.get('view-count').textContent,
+      data.prompts.length + ' 条 · ' + counts.length + ' 个分类');
   });
 
   check('每个分组的卡片摊到各列（不是全堆第一列）', () => {
@@ -334,13 +340,24 @@ setTimeout(() => {
     eq(groupsEl.style.paddingBottom, '0px');
   });
 
-  check('切到 Skills 走平铺，分列仍正确', () => {
+  // Skills 有分类时走分组、全未分类时走平铺，两种形态都要保证分列正确
+  check('切到 Skills 后分列仍正确', () => {
     navItems[1].click();
-    const flat = registry.get('groups').children[0];
-    eq(flat.classList.contains('masonry'), true);
-    eq(navEl.hidden, true);
-    eq(sidebarEl.hidden, true);
-    expectSpread(flat.children.map((c) => c.querySelectorAll('.card').length), 'Skills');
+    const container = registry.get('groups');
+    const first = container.children[0];
+    if (first.classList.contains('group')) {
+      eq(navEl.hidden, false, '有分类时展示分类导航');
+      eq(sidebarEl.hidden, false);
+      container.children.forEach((section) => {
+        expectSpread(sectionCards(section),
+          'Skills ' + section.querySelector('.group-name').textContent);
+      });
+    } else {
+      eq(first.classList.contains('masonry'), true, '无分类时平铺');
+      eq(navEl.hidden, true);
+      eq(sidebarEl.hidden, true);
+      expectSpread(first.children.map((c) => c.querySelectorAll('.card').length), 'Skills');
+    }
   });
 
   check('切回 Prompts 恢复分组', () => {
