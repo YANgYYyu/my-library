@@ -33,7 +33,7 @@ Windows 使用 `py -3` 或 `python`；在 PowerShell 用 `py -3 "$STORAGE_SKILL_
 
 ### Step 2 分析与分级
 
-先看 `system.os` 判断系统，读对应的数据布局参考：macOS 读 references/macos.md（references/macos.md），Windows 读 references/windows.md（references/windows.md）（讲该系统东西存哪、怎么辨认、归哪一级）。然后读 `storage_scan.json` 做这几件事：
+先看 `system.os` 判断系统，读对应的数据布局参考：macOS 读 references/macos.md，Windows 读 references/windows.md（讲该系统东西存哪、怎么辨认、归哪一级）。然后读 `storage_scan.json` 做这几件事：
 
 1. **挑 Top 5** 占用大户，判定类型（系统资产/应用本体/应用数据/应用缓存/开发缓存/用户文件/媒体内容/下载内容/虚拟机镜像/回收站/其他）。
 2. **识别"神秘大目录"**：UUID 命名的 Container、不明的隐藏目录，要追查它属于哪个 App、装的是什么（例如某 97GB 的 UUID Container 实为 Bilibili 离线视频缓存）。必要时 `ls`/`du` 深入一层看清楚，但仍只读。
