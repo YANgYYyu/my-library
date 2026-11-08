@@ -930,6 +930,11 @@ function bindUI() {
     { passive: true }
   );
 
+  // 同一页面内点击深链只会触发 hashchange，不会重新加载；这里同步打开/关闭弹窗
+  window.addEventListener('hashchange', () => {
+    if (!openHashTarget()) hideModal();
+  });
+
   let resizeTimer;
   window.addEventListener('resize', () => {
     window.clearTimeout(resizeTimer);

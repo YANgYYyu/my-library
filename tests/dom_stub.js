@@ -526,6 +526,15 @@ setTimeout(() => {
     eq(window.location.hash, '');
   });
 
+  check('深链：同一页面 hashchange 也能打开', () => {
+    const target = data.prompts[data.prompts.length - 1];
+    window.location.hash = __inner.itemHash('prompts', target.id);
+    fire('hashchange');
+    eq(modalEl.hidden, false, '弹窗已打开');
+    eq(registry.get('modal-title').textContent, target.title);
+    closeModal();
+  });
+
   check('Markdown 渲染经过消毒', () => {
     const holder = document.createElement('div');
     __inner.appendMarkdown(holder, '<script>alert(1)</script>正文');
