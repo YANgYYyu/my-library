@@ -2,8 +2,9 @@
 # 启动或重启 Prompt & Skills 预览服务（端口固定 8001）。
 set -euo pipefail
 
-PORT=8001
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=config.sh
+source "$SCRIPT_DIR/config.sh"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PUBLIC_DIR="$ROOT_DIR/public"
 PID_FILE="/tmp/my-library-server-$PORT.pid"

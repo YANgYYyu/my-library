@@ -64,5 +64,41 @@ class CssSyntaxTest(unittest.TestCase):
         self.assertEqual(used - declared, set())
 
 
+def css_block(selector):
+    match = re.search(
+        r"(?m)^" + re.escape(selector) + r"\s*\{([^}]*)\}", CSS
+    )
+    if match is None:
+        raise AssertionError("找不到选择器 " + selector)
+    return match.group(1)
+
+
+class TargetSizeTest(unittest.TestCase):
+    """开发文档承诺主要点击区域不小于 40px，这里把关键控件固化下来。"""
+
+    def test_primary_controls_are_at_least_40px(self):
+        cases = [
+            (".btn", "min-height: 40px"),
+            (".group-chip", "height: 40px"),
+            (".group-toggle", "min-height: 40px"),
+            (".nav-item", "min-height: 40px"),
+            (".nav-subitem", "min-height: 40px"),
+            (".sidebar-close", "width: 40px"),
+            (".sidebar-close", "height: 40px"),
+            (".modal-close", "width: 40px"),
+            (".menu-toggle", "height: 44px"),
+        ]
+        for selector, declaration in cases:
+            with self.subTest(selector + " " + declaration):
+                self.assertIn(declaration, css_block(selector))
+
+
+class ModalA11yTest(unittest.TestCase):
+    def test_modal_body_is_focusable(self):
+        match = re.search(r'<div id="modal-body"[^>]*>', HTML)
+        self.assertIsNotNone(match)
+        self.assertIn('tabindex="0"', match.group(0))
+
+
 if __name__ == "__main__":
     unittest.main()

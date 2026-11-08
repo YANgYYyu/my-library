@@ -326,7 +326,8 @@ function renderGroups(groups) {
     const flat = document.createElement('div');
     flat.className = 'masonry';
     container.appendChild(flat);
-    renderMasonry(flat, [...state.data[state.view]].sort(compareItems));
+    // groups 里的条目已经按「分类、标题」排好序，平铺时直接复用，避免再排一次
+    renderMasonry(flat, groups.length ? groups[0].items : []);
     stickyTop = 0;
     fitScrollTail();
     syncActiveGroup();
@@ -574,11 +575,14 @@ function appendCopyButton(parent, text) {
   btn.type = 'button';
   btn.className = 'btn btn-primary';
   btn.textContent = '复制原始 Markdown';
+  let resetTimer = 0;
   btn.addEventListener('click', async () => {
     const ok = await copyText(text);
     btn.textContent = ok ? '已复制' : '复制失败';
     announce(ok ? '已复制原始 Markdown' : '复制失败，请手动选择文本复制');
-    window.setTimeout(() => {
+    // 连续点击时清掉上一次的复位定时器，避免标签提前跳回默认文案
+    window.clearTimeout(resetTimer);
+    resetTimer = window.setTimeout(() => {
       btn.textContent = '复制原始 Markdown';
     }, 1500);
   });

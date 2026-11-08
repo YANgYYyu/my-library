@@ -8,6 +8,8 @@
   --card-bg: #ffffff;
   --card-hover-border: #0969da;
   --accent: #0969da;
+  --accent-bg: #0969da;
+  --accent-on-soft: #0550ae;
   --accent-text: #ffffff;
   --accent-soft: rgba(9, 105, 218, 0.1);
   --shadow: 0 1px 3px rgba(31, 35, 40, 0.12);
@@ -23,7 +25,7 @@
   /* 分类横条高度。注意它同时是分组标题的吸顶偏移量（见 .group-header 的 top），
      改这个值必须保证 .group-nav 的实际高度与之一致，否则两条吸顶条会互相压住。
      移动端横条不吸顶，分组标题改用 --topbar-h。 */
-  --group-nav-h: 52px;
+  --group-nav-h: 56px;
   /* 移动端汉堡按钮占用的顶部空间，桌面端为 0 */
   --topbar-h: 0px;
   /* 分组配色：色相由 JS 按分类名写入行内 --group-hue，这里给默认值 */
@@ -46,6 +48,8 @@
     --card-bg: #161b22;
     --card-hover-border: #2f81f7;
     --accent: #2f81f7;
+    --accent-bg: #1f6feb;
+    --accent-on-soft: #79b8ff;
     --accent-text: #ffffff;
     --accent-soft: rgba(47, 129, 247, 0.16);
     --shadow: 0 1px 3px rgba(1, 4, 9, 0.6);
@@ -161,7 +165,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 36px;
+  min-height: 40px;
   margin-bottom: 24px;
 }
 
@@ -174,8 +178,8 @@ button {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   margin-right: -6px;
   border: none;
   border-radius: var(--radius-sm);
@@ -198,6 +202,7 @@ button {
 }
 
 .nav-item {
+  min-height: 40px;
   padding: 9px 12px;
   border: none;
   border-radius: var(--radius-sm);
@@ -220,7 +225,7 @@ button {
 
 .nav-item.is-active {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-on-soft);
   font-weight: 600;
 }
 
@@ -248,6 +253,7 @@ button {
   justify-content: space-between;
   gap: 8px;
   padding: 7px 12px;
+  min-height: 40px;
   border: none;
   border-radius: var(--radius-sm);
   background: none;
@@ -279,7 +285,7 @@ button {
 
 .nav-subitem.is-current {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-on-soft);
   font-weight: 600;
 }
 
@@ -373,7 +379,7 @@ button {
   align-items: center;
   gap: 7px;
   flex: none;
-  height: 36px;
+  height: 40px;
   padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -451,6 +457,7 @@ button {
   align-items: center;
   gap: 10px;
   width: 100%;
+  min-height: 40px;
   padding: 2px 0;
   border: none;
   background: none;
@@ -823,7 +830,7 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 38px;
+  min-height: 40px;
   padding: 8px 16px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -846,18 +853,19 @@ button {
 }
 
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--accent-bg);
   color: var(--accent-text);
 }
 
+/* 悬停时压暗背景而不是提亮：提亮会降低白字对比度，暗色主题下会跌破 AA */
 .btn-primary:hover {
   color: var(--accent-text);
-  filter: brightness(1.08);
+  filter: brightness(0.95);
 }
 
 .btn-primary:active {
-  filter: brightness(0.96);
+  filter: brightness(0.9);
 }
 
 .btn:disabled {
@@ -872,7 +880,7 @@ button {
 }
 
 .btn-primary:disabled:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-bg);
   color: var(--accent-text);
 }
 
@@ -923,7 +931,7 @@ button {
 
 @media (max-width: 767px) {
   :root {
-    --group-nav-h: 48px;
+    --group-nav-h: 56px;
     --topbar-h: 56px;
   }
 

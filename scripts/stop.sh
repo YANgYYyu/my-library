@@ -2,9 +2,9 @@
 # 停止 Prompt & Skills 预览服务（端口固定 8001）。
 set -euo pipefail
 
-PORT=8001
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=config.sh
+source "$SCRIPT_DIR/config.sh"
 PID_FILE="/tmp/my-library-server-$PORT.pid"
 
 if [[ ! -f "$PID_FILE" ]]; then

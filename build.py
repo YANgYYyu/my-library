@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -77,22 +78,36 @@ def first_line(text: str) -> str:
     return ""
 
 
+def intro_line(text: str) -> str:
+    """简介：正文第一行，去掉行首的 Markdown 标题标记。
+
+    prompt 常以 ``# Role：...`` 开头；直接截第一行会让卡片简介显示成 ``# Role：...``。
+    这里只去掉行首的 ``#``，不改动正文本身。
+    """
+    return re.sub(r"^#{1,6}\s+", "", first_line(text))
+
+
 def collect(content_dir: Path) -> tuple[dict, list[str]]:
     """读取 content 目录，返回 (data, errors)。
 
     递归采集每个分类目录下的所有 Markdown 文件。出现任何解析错误、
-    内容 ID 重复或分类目录为空时，都会记录到 errors 中。
+    内容 ID 重复、根目录为空或没有 prompts/skills 目录时，都会记录到 errors 中。
     """
+    if not content_dir.is_dir():
+        return {"prompts": [], "skills": []}, [f"{content_dir}: 内容目录不存在"]
+
     prompts: list[dict] = []
     skills: list[dict] = []
     errors: list[str] = []
     seen_ids: set[str] = set()
+    kind_seen = False
 
     for kind in ("prompts", "skills"):
         kind_dir = content_dir / kind
         if not kind_dir.is_dir():
             continue
 
+        kind_seen = True
         paths = sorted(kind_dir.rglob("*.md"))
         if not paths:
             errors.append(f"{kind_dir}: 目录下没有找到任何 Markdown 文件")
@@ -117,7 +132,7 @@ def collect(content_dir: Path) -> tuple[dict, list[str]]:
                     "id": relative_id(path, kind_dir),
                     "title": path.stem,
                     "category": relative_category(path, kind_dir),
-                    "intro": first_line(text),
+                    "intro": intro_line(text),
                     "body": text,
                 }
             else:
@@ -149,6 +164,9 @@ def collect(content_dir: Path) -> tuple[dict, list[str]]:
             else:
                 skills.append(entry)
 
+    if not kind_seen:
+        errors.append(f"{content_dir}: 没有 prompts 或 skills 目录")
+
     return {"prompts": prompts, "skills": skills}, errors
 
 
@@ -159,8 +177,8 @@ def write_data(data: dict, data_path: Path) -> None:
     data_path.write_text(payload, encoding="utf-8")
 
 
-def main() -> int:
-    data, errors = collect(CONTENT_DIR)
+def main(content_dir: Path = CONTENT_DIR, data_path: Path = DATA_PATH) -> int:
+    data, errors = collect(content_dir)
     for error in errors:
         print(f"[build] {error}", file=sys.stderr)
 
@@ -168,9 +186,9 @@ def main() -> int:
         print("[build] 存在解析错误，未更新 data.json", file=sys.stderr)
         return 1
 
-    write_data(data, DATA_PATH)
+    write_data(data, data_path)
     print(
-        f"[build] 已生成 {DATA_PATH}: "
+        f"[build] 已生成 {data_path}: "
         f"{len(data['prompts'])} prompts, {len(data['skills'])} skills"
     )
     return 0

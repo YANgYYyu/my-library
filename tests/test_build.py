@@ -1,5 +1,7 @@
 """build.py 的单元测试。运行方式：python3 -m unittest discover tests"""
 
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -73,6 +75,12 @@ class CollectTest(unittest.TestCase):
         self.write("prompts", "翻译助手.md", "\n\n你是一名专业的翻译。\n第二行\n")
         data, _ = build.collect(self.content)
         self.assertEqual(data["prompts"][0]["intro"], "你是一名专业的翻译。")
+
+    def test_prompt_intro_strips_heading_marker(self):
+        self.write("prompts", "人生设计术.md", "# Role：人生设计师\n\n正文\n")
+        data, _ = build.collect(self.content)
+        self.assertEqual(data["prompts"][0]["intro"], "Role：人生设计师")
+        self.assertEqual(data["prompts"][0]["body"], "# Role：人生设计师\n\n正文\n")
 
     def test_prompt_empty_body_gives_empty_intro(self):
         self.write("prompts", "b.md", "\n")
@@ -230,6 +238,64 @@ class CollectTest(unittest.TestCase):
         data, errors = build.collect(self.content)
         self.assertEqual(data["prompts"], [])
         self.assertTrue(any("没有找到任何 Markdown 文件" in e for e in errors))
+
+    def test_missing_content_dir_reports_error(self):
+        data, errors = build.collect(self.content / "不存在")
+        self.assertEqual(data, {"prompts": [], "skills": []})
+        self.assertTrue(any("内容目录不存在" in e for e in errors))
+
+    def test_content_without_kind_dirs_reports_error(self):
+        self.content.mkdir()
+        data, errors = build.collect(self.content)
+        self.assertEqual(data, {"prompts": [], "skills": []})
+        self.assertTrue(any("没有 prompts 或 skills 目录" in e for e in errors))
+
+
+class MainTest(unittest.TestCase):
+    """main() 的失败关闭：有错误时不覆盖已发布的 data.json。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.content = self.root / "content"
+        self.out = self.root / "public" / "data.json"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def write(self, kind, name, text):
+        path = self.content / kind / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def run_main(self, content_dir=None):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            return build.main(content_dir or self.content, self.out)
+
+    def test_success_writes_data(self):
+        self.write("prompts", "a.md", "正文\n")
+        self.assertEqual(self.run_main(), 0)
+        data = json.loads(self.out.read_text(encoding="utf-8"))
+        self.assertEqual(len(data["prompts"]), 1)
+
+    def test_error_does_not_overwrite_existing_data(self):
+        self.write("prompts", "bad.md", "---\ntitle: 旧格式\n---\n正文\n")
+        self.out.parent.mkdir(parents=True)
+        self.out.write_text("旧产物", encoding="utf-8")
+        self.assertEqual(self.run_main(), 1)
+        self.assertEqual(self.out.read_text(encoding="utf-8"), "旧产物")
+
+    def test_missing_content_dir_does_not_overwrite(self):
+        self.out.parent.mkdir(parents=True)
+        self.out.write_text("旧产物", encoding="utf-8")
+        self.assertEqual(self.run_main(self.root / "不存在"), 1)
+        self.assertEqual(self.out.read_text(encoding="utf-8"), "旧产物")
+
+    def test_content_without_kind_dirs_does_not_write(self):
+        self.content.mkdir()
+        self.assertEqual(self.run_main(), 1)
+        self.assertFalse(self.out.exists())
 
 
 class WriteDataTest(unittest.TestCase):

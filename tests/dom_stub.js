@@ -10,6 +10,7 @@
 // 输出：JSON，{checks: [{name, ok, detail}], info: {...}}
 
 const fs = require('fs');
+const collator = new Intl.Collator('zh');
 
 const registry = new Map();
 const timers = [];
@@ -170,7 +171,7 @@ const window = {
   setTimeout: (fn) => { timers.push(fn); return timers.length; },
   clearTimeout: () => {},
   addEventListener: (type, fn) => { (winListeners[type] ||= []).push(fn); },
-  getComputedStyle: () => ({ top: '52px' }),
+  getComputedStyle: () => ({ top: '56px' }),
 };
 
 global.document = document;
@@ -185,11 +186,13 @@ global.fetch = async () => ({
 // 用 new Function 包一层执行，函数声明不会漏到外层；末尾把内部函数挂出来供断言调用
 new Function(
   fs.readFileSync(process.argv[3], 'utf8') +
-    '\n;global.__inner = { fitScrollTail: () => fitScrollTail() };'
+    '\n;global.__inner = { fitScrollTail: () => fitScrollTail(),' +
+    ' renderSkeleton, renderEmpty, renderError, setDrawer, trapFocus, copyText };'
 )();
 
 function flush() { while (timers.length) timers.shift()(); }
 function fire(type) { (winListeners[type] || []).forEach((fn) => fn()); }
+function fireDoc(type, event) { (docListeners[type] || []).forEach((fn) => fn(event)); }
 
 const checks = [];
 function check(name, fn) {
@@ -238,10 +241,16 @@ setTimeout(() => {
     section.querySelector('.masonry').children.map((c) => c.querySelectorAll('.card').length);
   const names = () => groupsEl.children.map((s) => s.querySelector('.group-name').textContent);
 
-  check('渲染出 5 个分组，顺序按拼音', () => {
+  check('渲染出的分组数与顺序按拼音', () => {
+    // 从数据推导而不是写死条数：新增分类时这条断言不应失效
+    const expected = [...new Set(data.prompts.map((p) => p.category))].sort((a, b) =>
+      collator.compare(a, b));
+    const emptyAt = expected.indexOf('');
+    if (emptyAt !== -1 && expected.length > 1) expected.push(expected.splice(emptyAt, 1)[0]);
+    eq(groupsEl.children.length, expected.length, '分组数');
     eq(groupsEl.children.map((c) => c.classList.contains('group')),
-      [true, true, true, true, true]);
-    eq(names(), ['解决问题', '决策', '认识你自己', '问清问题', '学习']);
+      expected.map(() => true), '分组节点');
+    eq(names(), expected.map((c) => (c ? c.split('/').join(' / ') : '未分类')));
   });
 
   check('分组标题是 h3，卡片标题是 h4', () => {
@@ -386,6 +395,7 @@ setTimeout(() => {
     navItems[view === 'prompts' ? 0 : 1].click();
     const link = groupsEl.querySelectorAll('.card-link').find((b) => b.textContent === title);
     ok(link, '找到卡片 ' + title);
+    link.focus();
     link.click();
   };
   const closeModal = () => registry.get('modal-close').click();
@@ -427,6 +437,59 @@ setTimeout(() => {
     eq(bodyEl.querySelector('.skill-detail'), null);
     eq(actionTexts(), item.url ? ['打开 GitHub'] : []);
     closeModal();
+  });
+
+  check('弹窗：关闭后焦点归还触发卡片', () => {
+    navItems[0].click();
+    const link = groupsEl.querySelectorAll('.card-link').find((b) => b.textContent === '第一性原理');
+    ok(link, '找到卡片 第一性原理');
+    link.focus();
+    link.click();
+    closeModal();
+    eq(document.activeElement, link, '焦点归还到卡片');
+  });
+
+  check('弹窗：Esc 关闭', () => {
+    openCard('prompts', '第一性原理');
+    fireDoc('keydown', { key: 'Escape', preventDefault() {} });
+    eq(modalEl.hidden, true, 'Esc 后弹窗已关闭');
+  });
+
+  check('抽屉：打开与关闭状态', () => {
+    const sidebar = registry.get('sidebar');
+    const scrim = registry.get('scrim');
+    const menu = registry.get('menu-toggle');
+    __inner.setDrawer(true);
+    eq(sidebar.classList.contains('is-open'), true, '抽屉已打开');
+    eq(scrim.hidden, false, '遮罩已显示');
+    eq(menu.getAttribute('aria-expanded'), 'true');
+    __inner.setDrawer(false);
+    eq(sidebar.classList.contains('is-open'), false, '抽屉已关闭');
+    eq(scrim.hidden, true, '遮罩已隐藏');
+    eq(menu.getAttribute('aria-expanded'), 'false');
+  });
+
+  check('加载态：渲染骨架卡', () => {
+    __inner.renderSkeleton();
+    ok(groupsEl.querySelectorAll('.skeleton-card').length > 0, '应渲染骨架卡');
+  });
+
+  check('空态：显示说明并收起分类导航', () => {
+    __inner.renderEmpty();
+    eq(groupsEl.querySelector('.state-title').textContent, '暂无内容');
+    eq(navEl.hidden, true);
+  });
+
+  check('错误态：区分 404 并给出重试按钮', () => {
+    __inner.renderError(new Error('HTTP 404'));
+    eq(groupsEl.querySelector('.state-title').textContent, '数据加载失败');
+    ok(
+      groupsEl.querySelector('.state-desc').textContent.indexOf('python3 build.py') !== -1,
+      '404 提示应指向构建脚本'
+    );
+    const retry = groupsEl.querySelector('.btn');
+    ok(retry, '应有重试按钮');
+    eq(retry.textContent, '重试');
   });
 
   process.stdout.write(JSON.stringify({ checks: checks, info: info }));
