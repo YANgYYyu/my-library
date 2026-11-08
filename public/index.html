@@ -26,6 +26,10 @@
     <header class="content-header">
       <h2 id="view-title">Prompts</h2>
       <span id="view-count" class="view-count"></span>
+      <div class="search">
+        <input id="search" class="search-input" type="search" placeholder="搜索标题或正文"
+          aria-label="搜索标题或正文" autocomplete="off">
+      </div>
     </header>
     <nav id="group-nav" class="group-nav" aria-label="分类快捷跳转" hidden></nav>
     <p id="status" class="sr-only" role="status"></p>
@@ -43,6 +47,7 @@
   </div>
 
   <script src="vendor/marked.min.js"></script>
+  <script src="vendor/dompurify.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

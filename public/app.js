@@ -5,8 +5,12 @@ const collator = new Intl.Collator('zh');
 // 分组配色：从固定色板里按分类名取色，避免随机色相撞出刺眼的颜色
 const GROUP_HUES = [212, 258, 174, 340, 22, 140, 196, 288];
 
+// 卡片之间的垂直间距，与 style.css 中 .masonry-col 的 gap 保持一致
+const CARD_GAP = 16;
+
 const state = {
   view: 'prompts',
+  query: '',
   data: null,
   groups: [],
   sections: new Map(),
@@ -18,6 +22,8 @@ const state = {
 
 // 弹窗关闭后要把焦点还回去的元素
 let lastFocused = null;
+// 当前弹窗对应的深链；关闭时只在 hash 仍是它时清空，避免覆盖用户手动改过的地址
+let openedHash = '';
 let scrollTicking = false;
 // 分组标题吸顶后离视口顶部的距离，render 时测量一次，滚动时直接用
 let stickyTop = 0;
@@ -64,17 +70,26 @@ function buildColumns(container) {
 
 function renderMasonry(container, items) {
   const columns = buildColumns(container);
+  if (!items.length) return;
 
-  items.forEach((item) => {
+  const cards = items.map(createCard);
+
+  // 先把卡片全部放进第一列，让浏览器只做一次布局，再统一读取每张卡的高度。
+  // 原来的写法每插一张卡就读一次 offsetHeight，会触发 N 次强制重排；卡片多了会明显卡顿。
+  cards.forEach((card) => columns[0].appendChild(card));
+  const heights = cards.map((card) => card.offsetHeight);
+
+  // 清空后按累计高度重新分配到最短列；分列过程中不再读取布局。
+  columns.forEach((col) => { col.innerHTML = ''; });
+  const totals = columns.map(() => 0);
+
+  cards.forEach((card, index) => {
     let shortest = 0;
-    let shortestHeight = Infinity;
-    columns.forEach((col, index) => {
-      if (col.offsetHeight < shortestHeight) {
-        shortestHeight = col.offsetHeight;
-        shortest = index;
-      }
-    });
-    columns[shortest].appendChild(createCard(item));
+    for (let i = 1; i < totals.length; i += 1) {
+      if (totals[i] < totals[shortest]) shortest = i;
+    }
+    columns[shortest].appendChild(card);
+    totals[shortest] += heights[index] + CARD_GAP;
   });
 }
 
@@ -154,6 +169,15 @@ function renderEmpty() {
     createStatePanel(
       '暂无内容',
       '这个列表还没有条目。在 content 目录下添加 Markdown 文件后，运行 python3 build.py 重新构建即可。'
+    )
+  );
+}
+
+function renderNoResults() {
+  renderState(
+    createStatePanel(
+      '没有匹配的内容',
+      '换个关键词试试。搜索范围包括标题、分类、简介和正文。'
     )
   );
 }
@@ -238,6 +262,21 @@ function groupItems(items) {
 // 只有一种分类且它还是「未分类」时，不值得加分组标题
 function isGrouped(groups) {
   return groups.length > 1 || (groups.length === 1 && groups[0].key !== '');
+}
+
+// 搜索范围：标题、分类、简介和正文；空查询表示不过滤。
+function matchesQuery(item, query) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  const haystack = [item.title, item.category, item.intro, item.body || '']
+    .join('\n')
+    .toLowerCase();
+  return haystack.indexOf(needle) !== -1;
+}
+
+function filterItems(items, query) {
+  if (!query.trim()) return items;
+  return items.filter((item) => matchesQuery(item, query));
 }
 
 function clearGroupNavs() {
@@ -523,17 +562,25 @@ function scrollChipIntoView(chip) {
 }
 
 function render() {
-  const items = state.data[state.view];
+  const allItems = state.data[state.view];
+  const items = filterItems(allItems, state.query);
   const isPrompts = state.view === 'prompts';
   const title = isPrompts ? 'Prompts' : 'Skills';
   const groups = groupItems(items);
   const groupCount = isGrouped(groups) ? groups.length : 0;
+  const searching = state.query.trim() !== '';
 
   $('#view-title').textContent = title;
-  $('#view-count').textContent =
-    items.length + ' 条' + (groupCount ? ' · ' + groupCount + ' 个分类' : '');
+  $('#view-count').textContent = searching
+    ? items.length + ' 条匹配'
+    : items.length + ' 条' + (groupCount ? ' · ' + groupCount + ' 个分类' : '');
   announce(
-    title + '，共 ' + items.length + ' 条' + (groupCount ? '，' + groupCount + ' 个分类' : '')
+    title +
+      (searching ? '，搜索“' + state.query.trim() + '”' : '') +
+      '，共 ' +
+      items.length +
+      ' 条' +
+      (groupCount ? '，' + groupCount + ' 个分类' : '')
   );
 
   renderGroupNavs(groups);
@@ -541,7 +588,8 @@ function render() {
   layoutKey = layoutKeyOf();
 
   if (!items.length) {
-    renderEmpty();
+    if (searching) renderNoResults();
+    else renderEmpty();
     return;
   }
 
@@ -559,12 +607,40 @@ function announce(message) {
   status.textContent = message;
 }
 
+const MARKDOWN_TAGS = [
+  'p', 'br', 'strong', 'b', 'em', 'i', 'del', 's', 'code', 'pre', 'blockquote',
+  'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'a',
+  'table', 'thead', 'tbody', 'tr', 'th', 'td', 'img',
+];
+const MARKDOWN_ATTRS = ['href', 'src', 'alt', 'title'];
+
+// Markdown 正文最终会写进 innerHTML，必须经过白名单消毒。
+// 本地 DOMPurify 缺失时返回 null，由调用方降级为纯文本，避免退回未消毒的渲染。
+function sanitizeHtml(html) {
+  if (typeof DOMPurify === 'undefined') return null;
+  try {
+    return DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: MARKDOWN_TAGS,
+      ALLOWED_ATTR: MARKDOWN_ATTRS,
+      FORBID_ATTR: ['style'],
+      ALLOW_DATA_ATTR: false,
+    });
+  } catch (error) {
+    return null;
+  }
+}
+
 function appendMarkdown(el, text) {
   // 旧版 data.json 没有 body 字段时，marked 不会抛错而是渲染出 "undefined"，
   // 这里先兜底，避免把内部字段状态显示给用户。
   const source = text || '';
   try {
-    el.innerHTML = marked.parse(source);
+    const safe = sanitizeHtml(marked.parse(source));
+    if (safe === null) {
+      el.textContent = source;
+      return;
+    }
+    el.innerHTML = safe;
   } catch (error) {
     el.textContent = source;
   }
@@ -589,8 +665,58 @@ function appendCopyButton(parent, text) {
   parent.appendChild(btn);
 }
 
+// 单条内容的深链格式：#/prompts/<encodeURIComponent(id)> 或 #/skills/...
+function itemHash(view, id) {
+  return '#/' + view + '/' + encodeURIComponent(id);
+}
+
+function parseItemHash(hash) {
+  const match = /^#\/(prompts|skills)\/(.+)$/.exec(hash || '');
+  if (!match) return null;
+  try {
+    return { view: match[1], id: decodeURIComponent(match[2]) };
+  } catch (error) {
+    return null;
+  }
+}
+
+function absoluteItemLink(hash) {
+  const origin = window.location.origin || '';
+  const path = window.location.pathname || '/';
+  return origin + path + (window.location.search || '') + hash;
+}
+
+function setLocationHash(hash) {
+  if (window.history && typeof window.history.replaceState === 'function') {
+    const fallback = (window.location.pathname || '') + (window.location.search || '');
+    window.history.replaceState(null, '', hash || fallback);
+    return;
+  }
+  window.location.hash = hash || '';
+}
+
+function appendCopyLinkButton(parent, view, id) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn';
+  btn.textContent = '复制链接';
+  let resetTimer = 0;
+  btn.addEventListener('click', async () => {
+    const ok = await copyText(absoluteItemLink(itemHash(view, id)));
+    btn.textContent = ok ? '链接已复制' : '复制失败';
+    announce(ok ? '已复制内容链接' : '复制失败，请手动复制地址栏链接');
+    window.clearTimeout(resetTimer);
+    resetTimer = window.setTimeout(() => {
+      btn.textContent = '复制链接';
+    }, 1500);
+  });
+  parent.appendChild(btn);
+}
+
 function openModal(item) {
   lastFocused = document.activeElement;
+  openedHash = itemHash(state.view, item.id);
+  setLocationHash(openedHash);
   $('#modal-title').textContent = item.title;
 
   const categoryEl = $('#modal-category');
@@ -605,6 +731,7 @@ function openModal(item) {
   if (state.view === 'prompts') {
     appendMarkdown(bodyEl, item.body);
     appendCopyButton(actionsEl, item.body);
+    appendCopyLinkButton(actionsEl, state.view, item.id);
   } else {
     const intro = document.createElement('p');
     intro.className = 'skill-intro';
@@ -618,6 +745,8 @@ function openModal(item) {
       bodyEl.appendChild(detail);
       appendCopyButton(actionsEl, item.body);
     }
+
+    appendCopyLinkButton(actionsEl, state.view, item.id);
 
     if (item.url) {
       const githubBtn = document.createElement('a');
@@ -640,6 +769,11 @@ function hideModal() {
 
   $('#modal').hidden = true;
   document.body.classList.remove('modal-open');
+
+  if (openedHash && window.location.hash === openedHash) {
+    setLocationHash('');
+  }
+  openedHash = '';
 
   if (lastFocused && document.body.contains(lastFocused)) {
     lastFocused.focus();
@@ -726,6 +860,26 @@ function selectView(view) {
   syncActiveGroup();
 }
 
+function openHashTarget() {
+  const target = parseItemHash(window.location.hash);
+  if (!target || !state.data || !state.data[target.view]) return false;
+  const item = state.data[target.view].find((entry) => entry.id === target.id);
+  if (!item) return false;
+
+  // 深链优先：清掉可能残留的搜索词，保证目标条目能被找到并展示
+  state.query = '';
+  const search = $('#search');
+  if (search) search.value = '';
+
+  if (state.view !== target.view) {
+    selectView(target.view);
+  } else {
+    render();
+  }
+  openModal(item);
+  return true;
+}
+
 function bindUI() {
   $('#menu-toggle').addEventListener('click', () => setDrawer(true));
   $('#sidebar-close').addEventListener('click', () => setDrawer(false));
@@ -733,6 +887,16 @@ function bindUI() {
   $('#modal-close').addEventListener('click', hideModal);
   $('#modal').addEventListener('click', (event) => {
     if (event.target === event.currentTarget) hideModal();
+  });
+
+  let searchTimer = 0;
+  $('#search').addEventListener('input', (event) => {
+    const value = event.target.value;
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => {
+      state.query = value;
+      render();
+    }, 120);
   });
 
   document.querySelectorAll('.nav-item').forEach((button) => {
@@ -800,7 +964,7 @@ async function load() {
   try {
     state.data = await fetchData();
     container.removeAttribute('aria-busy');
-    render();
+    if (!openHashTarget()) render();
     return true;
   } catch (error) {
     container.removeAttribute('aria-busy');

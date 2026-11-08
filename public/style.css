@@ -331,8 +331,9 @@ button {
 
 .content-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
   margin-bottom: 22px;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--border);
@@ -349,6 +350,31 @@ button {
   color: var(--text-secondary);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
+}
+
+/* 搜索框放在标题行右侧；移动端换行后占满整行 */
+.search {
+  margin-left: auto;
+}
+
+.search-input {
+  width: 240px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.search-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.search-input:focus-visible {
+  border-color: var(--accent);
 }
 
 /* 分类横条：负边距做通栏，卡片从下方划过时两侧不会漏出来 */
@@ -714,6 +740,7 @@ button {
 
 .modal-category {
   display: inline-block;
+  align-self: flex-start;
   margin: 0 0 18px;
   padding: 2px 9px;
   border: 1px solid var(--border);
@@ -969,6 +996,15 @@ button {
 
   .content-header h2 {
     font-size: 21px;
+  }
+
+  .search {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .search-input {
+    width: 100%;
   }
 
   /* 移动端顶部已经有汉堡按钮，再叠一条吸顶横条会占掉太多高度：

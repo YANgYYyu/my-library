@@ -40,6 +40,7 @@ class El {
     this.style = { setProperty: (k, v) => { this.style[k] = v; } };
     this._text = '';
     this._innerHTML = '';
+    this.value = '';
     this.hidden = false;
     this.id = '';
     this._top = 0;
@@ -122,8 +123,8 @@ class El {
 
 const IDS = [
   'menu-toggle', 'sidebar', 'sidebar-close', 'nav-groups', 'scrim', 'view-title',
-  'view-count', 'group-nav', 'status', 'groups', 'modal', 'modal-box', 'modal-close',
-  'modal-title', 'modal-category', 'modal-body', 'modal-actions',
+  'view-count', 'search', 'group-nav', 'status', 'groups', 'modal', 'modal-box',
+  'modal-close', 'modal-title', 'modal-category', 'modal-body', 'modal-actions',
 ];
 IDS.forEach((id) => { const el = new El('div'); el.id = id; registry.set(id, el); });
 
@@ -159,7 +160,20 @@ const window = {
   innerWidth: 1280,
   innerHeight: 900,
   scrollY: 0,
-  location: { protocol: 'http:' },
+  location: {
+    protocol: 'http:',
+    hash: '',
+    origin: 'http://localhost:8001',
+    pathname: '/',
+    search: '',
+  },
+  history: {
+    replaceState: (_state, _title, url) => {
+      if (typeof url !== 'string') return;
+      const hashAt = url.indexOf('#');
+      window.location.hash = hashAt === -1 ? '' : url.slice(hashAt);
+    },
+  },
   isSecureContext: false,
   matchMedia: (q) => {
     if (q.indexOf('max-width: 767px') !== -1) return { matches: window.innerWidth <= 767 };
@@ -178,6 +192,13 @@ global.document = document;
 global.window = window;
 Object.defineProperty(global, 'navigator', { value: {}, configurable: true, writable: true });
 global.marked = { parse: (s) => '<p>' + s + '</p>' };
+// 桩不实现 DOMPurify 的解析，只保留测试需要的两个动作：去掉 script 和事件属性
+global.DOMPurify = {
+  sanitize: (html) =>
+    String(html)
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/\son\w+="[^"]*"/gi, ''),
+};
 global.fetch = async () => ({
   ok: true,
   json: async () => JSON.parse(fs.readFileSync(process.argv[2], 'utf8')),
@@ -187,7 +208,8 @@ global.fetch = async () => ({
 new Function(
   fs.readFileSync(process.argv[3], 'utf8') +
     '\n;global.__inner = { fitScrollTail: () => fitScrollTail(),' +
-    ' renderSkeleton, renderEmpty, renderError, setDrawer, trapFocus, copyText };'
+    ' renderSkeleton, renderEmpty, renderError, setDrawer, trapFocus, copyText,' +
+    ' appendMarkdown, openHashTarget, itemHash, parseItemHash };'
 )();
 
 function flush() { while (timers.length) timers.shift()(); }
@@ -407,7 +429,7 @@ setTimeout(() => {
     openCard('prompts', '第一性原理');
     eq(modalEl.hidden, false, '弹窗已打开');
     ok(hasContent(bodyEl), '正文已渲染');
-    eq(actionTexts(), ['复制原始 Markdown']);
+    eq(actionTexts(), ['复制原始 Markdown', '复制链接']);
     closeModal();
     eq(modalEl.hidden, true, '弹窗已关闭');
   });
@@ -416,7 +438,7 @@ setTimeout(() => {
     openCard('skills', 'grill-me');
     ok(hasContent(bodyEl.querySelector('.skill-intro')), '显示简介');
     ok(hasContent(bodyEl.querySelector('.skill-detail')), '显示正文');
-    eq(actionTexts(), ['复制原始 Markdown', '打开 GitHub']);
+    eq(actionTexts(), ['复制原始 Markdown', '复制链接', '打开 GitHub']);
     closeModal();
   });
 
@@ -426,7 +448,7 @@ setTimeout(() => {
     const item = data.skills.find((s) => !s.url && s.body && s.body.trim());
     if (!item) return;
     openCard('skills', item.title);
-    eq(actionTexts(), ['复制原始 Markdown'], '无链接时不给跳转按钮');
+    eq(actionTexts(), ['复制原始 Markdown', '复制链接'], '无链接时不给跳转按钮');
     closeModal();
   });
 
@@ -435,7 +457,7 @@ setTimeout(() => {
     if (!item) return;
     openCard('skills', item.title);
     eq(bodyEl.querySelector('.skill-detail'), null);
-    eq(actionTexts(), item.url ? ['打开 GitHub'] : []);
+    eq(actionTexts(), item.url ? ['复制链接', '打开 GitHub'] : ['复制链接']);
     closeModal();
   });
 
@@ -467,6 +489,48 @@ setTimeout(() => {
     eq(sidebar.classList.contains('is-open'), false, '抽屉已关闭');
     eq(scrim.hidden, true, '遮罩已隐藏');
     eq(menu.getAttribute('aria-expanded'), 'false');
+  });
+
+  check('搜索：按标题过滤、无结果提示并恢复', () => {
+    const input = registry.get('search');
+    const query = data.prompts[0].title;
+    const expected = data.prompts.filter((p) =>
+      [p.title, p.category, p.intro, p.body].join('\n').toLowerCase()
+        .indexOf(query.toLowerCase()) !== -1).length;
+
+    input.value = query;
+    input.dispatch('input');
+    flush();
+    eq(groupsEl.querySelectorAll('.card').length, expected, '搜索结果数');
+
+    input.value = 'zzzz-no-match';
+    input.dispatch('input');
+    flush();
+    eq(groupsEl.querySelector('.state-title').textContent, '没有匹配的内容');
+
+    input.value = '';
+    input.dispatch('input');
+    flush();
+    eq(groupsEl.querySelectorAll('.card').length, data.prompts.length, '清空搜索后恢复');
+  });
+
+  check('深链：hash 直接打开单条内容，关闭后清空', () => {
+    const target = data.prompts[0];
+    const hash = __inner.itemHash('prompts', target.id);
+    window.location.hash = hash;
+    eq(__inner.openHashTarget(), true, '应识别深链');
+    eq(modalEl.hidden, false, '弹窗已打开');
+    eq(registry.get('modal-title').textContent, target.title);
+    eq(window.location.hash, hash);
+    closeModal();
+    eq(window.location.hash, '');
+  });
+
+  check('Markdown 渲染经过消毒', () => {
+    const holder = document.createElement('div');
+    __inner.appendMarkdown(holder, '<script>alert(1)</script>正文');
+    ok(holder.innerHTML.indexOf('<script') === -1, '脚本标签应被移除');
+    ok(holder.innerHTML.indexOf('正文') !== -1, '正文仍应保留');
   });
 
   check('加载态：渲染骨架卡', () => {

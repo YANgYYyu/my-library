@@ -100,5 +100,13 @@ class ModalA11yTest(unittest.TestCase):
         self.assertIn('tabindex="0"', match.group(0))
 
 
+class AssetTest(unittest.TestCase):
+    def test_search_and_vendor_scripts_are_wired(self):
+        self.assertIn('id="search"', HTML)
+        self.assertIn("vendor/marked.min.js", HTML)
+        self.assertIn("vendor/dompurify.min.js", HTML)
+        self.assertIn("DOMPurify", JS)
+
+
 if __name__ == "__main__":
     unittest.main()
